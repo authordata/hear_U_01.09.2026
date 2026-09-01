@@ -9,7 +9,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -46,7 +45,7 @@ fun CrisisSupportDialog(
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Call 988 Crisis Lifeline", color = Color.White)
+                    Text("Call 988 Crisis Lifeline", color = MaterialTheme.colorScheme.onError)
                 }
                 
                 Spacer(modifier = Modifier.height(8.dp))

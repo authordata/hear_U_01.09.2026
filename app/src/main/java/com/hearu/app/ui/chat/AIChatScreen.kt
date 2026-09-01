@@ -11,7 +11,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -74,7 +73,7 @@ fun AIChatScreen(
                 .padding(horizontal = 16.dp),
             reverseLayout = true
         ) {
-            items(messages.reversed()) { msg ->
+            items(messages.reversed(), key = { it.id }) { msg ->
                 MessageBubble(message = msg, isMine = msg.senderId == "user123")
             }
         }
@@ -131,7 +130,7 @@ private fun ChatInputBar(
                 enabled = !isLoading && !isDisabled && inputText.isNotBlank(),
                 colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
-                Icon(Icons.Default.Send, contentDescription = "Send", tint = Color.White)
+                Icon(Icons.Default.Send, contentDescription = "Send", tint = MaterialTheme.colorScheme.onPrimary)
             }
         }
     }

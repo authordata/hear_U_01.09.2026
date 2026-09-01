@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -14,8 +15,8 @@ fun ReportUserDialog(
     onSubmitReport: (reason: String, details: String) -> Unit
 ) {
     val reasons = listOf("Harassment / Hate Speech", "Inappropriate Content", "Spam / Scams", "Safety Concern / Self Harm")
-    var selectedReason by remember { mutableStateOf(reasons[0]) }
-    var details by remember { mutableStateOf("") }
+    var selectedReason by rememberSaveable { mutableStateOf(reasons[0]) }
+    var details by rememberSaveable { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -37,7 +38,7 @@ fun ReportUserDialog(
                     ) {
                         RadioButton(
                             selected = (reason == selectedReason),
-                            onClick = { selectedReason = reason }
+                            onClick = null
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(reason, style = MaterialTheme.typography.bodyMedium)

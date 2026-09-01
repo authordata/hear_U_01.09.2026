@@ -11,12 +11,15 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hearu.app.ui.dialogs.CrisisSupportDialog
 import com.hearu.app.ui.dialogs.ReportUserDialog
 
@@ -29,11 +32,11 @@ fun ChatScreen(
     viewModel: ChatViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val messages by viewModel.messages.collectAsState()
-    var inputText by remember { mutableStateOf("") }
-    var showMenu by remember { mutableStateOf(false) }
-    var showReportDialog by remember { mutableStateOf(false) }
-    var showCrisisDialog by remember { mutableStateOf(false) }
+    val messages by viewModel.messages.collectAsStateWithLifecycle()
+    var inputText by rememberSaveable { mutableStateOf("") }
+    var showMenu by rememberSaveable { mutableStateOf(false) }
+    var showReportDialog by rememberSaveable { mutableStateOf(false) }
+    var showCrisisDialog by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(sessionId) {
         viewModel.joinSession(sessionId, userId)
@@ -63,7 +66,10 @@ fun ChatScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showCrisisDialog = true }) {
+                    IconButton(
+                        onClick = { showCrisisDialog = true },
+                        modifier = Modifier.semantics { contentDescription = "Emergency SOS crisis support" }
+                    ) {
                         Text("SOS", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelLarge)
                     }
                     IconButton(onClick = { showMenu = !showMenu }) {
@@ -117,7 +123,7 @@ fun ChatScreen(
                     },
                     colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
-                    Icon(Icons.Default.Send, contentDescription = "Send", tint = Color.White)
+                    Icon(Icons.Default.Send, contentDescription = "Send", tint = MaterialTheme.colorScheme.onPrimary)
                 }
             }
         }
@@ -129,7 +135,7 @@ fun ChatScreen(
                 .padding(horizontal = 16.dp),
             reverseLayout = true
         ) {
-            items(messages.reversed()) { msg ->
+            items(messages.reversed(), key = { it.id }) { msg ->
                 val isMine = msg.senderId == userId
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
