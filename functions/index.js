@@ -6,11 +6,15 @@ const db = admin.firestore();
 
 /**
  * 1. Matching Algorithm Cloud Function
- * Evaluates candidate Givers based on Emotion Tags, Rating, and Online Status
+ * Evaluates candidate Givers securely using authenticated context
  */
 exports.matchSeekerWithGiver = functions.https.onCall(async (data, context) => {
-    const { seekerId, tags } = data;
-    if (!seekerId) throw new functions.https.HttpsError("invalid-argument", "Seeker ID required");
+    // Enforce authentication & prevent IDOR
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "User must be authenticated to find a match.");
+    }
+    const seekerId = context.auth.uid;
+    const { tags } = data;
 
     const giversSnapshot = await db.collection("users")
         .where("role", "in", ["giver", "both"])
@@ -19,7 +23,7 @@ exports.matchSeekerWithGiver = functions.https.onCall(async (data, context) => {
         .get();
 
     if (giversSnapshot.empty) {
-        return { matchFound: false, message: "No givers currently online" };
+        return { matchFound: false, message: "No listeners are currently online." };
     }
 
     let bestGiver = null;
@@ -27,14 +31,14 @@ exports.matchSeekerWithGiver = functions.https.onCall(async (data, context) => {
 
     giversSnapshot.forEach(doc => {
         const giver = doc.data();
-        if (doc.id === seekerId) return;
+        if (doc.id === seekerId) return; // Cannot match with self
 
         let score = 0;
         const giverTags = giver.emotionTags || [];
         const overlap = tags ? tags.filter(t => giverTags.includes(t)).length : 0;
-        score += overlap * 35;
-        score += (giver.rating || 5.0) * 10;
-        score += 20;
+        score += overlap * 35; // 35% weight for topic overlap
+        score += (giver.rating || 5.0) * 10; // 10% weight for ratings
+        score += 20; // 20% base for being online
 
         if (score > highestScore) {
             highestScore = score;
@@ -44,6 +48,7 @@ exports.matchSeekerWithGiver = functions.https.onCall(async (data, context) => {
 
     if (!bestGiver) return { matchFound: false };
 
+    // Create active session
     const sessionRef = await db.collection("sessions").add({
         seekerId: seekerId,
         giverId: bestGiver.id,
@@ -56,8 +61,7 @@ exports.matchSeekerWithGiver = functions.https.onCall(async (data, context) => {
 });
 
 /**
- * 2. 30-Day Auto-Delete Daily Cron Job
- * Purges expired chats to strictly adhere to Privacy Policy and reduce cloud costs
+ * 2. 30-Day Auto-Delete Daily Cron Job (Optimized concurrent batching)
  */
 exports.purgeExpiredChats = functions.pubsub.schedule("every 24 hours").onRun(async (context) => {
     const thirtyDaysAgo = new Date(Date.now() - (30 * 24 * 60 * 60 * 1000));
@@ -67,13 +71,18 @@ exports.purgeExpiredChats = functions.pubsub.schedule("every 24 hours").onRun(as
         .limit(100)
         .get();
 
+    if (expiredSessions.empty) return null;
+
     const batch = db.batch();
-    for (const sessionDoc of expiredSessions.docs) {
+    
+    // Fetch all subcollection messages in parallel
+    const subcollectionPromises = expiredSessions.docs.map(async (sessionDoc) => {
         const messages = await sessionDoc.ref.collection("messages").get();
         messages.forEach(msg => batch.delete(msg.ref));
         batch.delete(sessionDoc.ref);
-    }
+    });
 
+    await Promise.all(subcollectionPromises);
     await batch.commit();
     console.log(`Successfully purged ${expiredSessions.size} expired chat sessions.`);
     return null;

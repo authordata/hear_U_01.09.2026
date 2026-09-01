@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hearu.app.ui.dialogs.CrisisSupportDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -22,9 +23,9 @@ fun AIChatScreen(
     onNavigateBack: () -> Unit,
     viewModel: AIChatViewModel = hiltViewModel()
 ) {
-    val messages by viewModel.messages.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val showCrisisDialog by viewModel.crisisEvent.collectAsState()
+    val messages by viewModel.messages.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val showCrisisDialog by viewModel.crisisEvent.collectAsStateWithLifecycle()
     var inputText by remember { mutableStateOf("") }
 
     if (showCrisisDialog) {
