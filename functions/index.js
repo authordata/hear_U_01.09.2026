@@ -3,18 +3,31 @@ const admin = require("firebase-admin");
 admin.initializeApp();
 
 const db = admin.firestore();
+const MAX_BATCH_SIZE = 400; // Safe under Firestore 500-op limit
 
 /**
- * 1. Matching Algorithm Cloud Function
- * Evaluates candidate Givers securely using authenticated context
+ * 1. Matching Algorithm — Authenticated, IDOR-safe, concurrent session guard
  */
 exports.matchSeekerWithGiver = functions.https.onCall(async (data, context) => {
-    // Enforce authentication & prevent IDOR
     if (!context.auth) {
-        throw new functions.https.HttpsError("unauthenticated", "User must be authenticated to find a match.");
+        throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
     }
     const seekerId = context.auth.uid;
-    const { tags } = data;
+
+    // Input validation
+    const tags = Array.isArray(data.tags) ? data.tags.filter(t => typeof t === 'string').slice(0, 10) : [];
+
+    // Guard: check for existing active session
+    const existingSession = await db.collection("sessions")
+        .where("seekerId", "==", seekerId)
+        .where("status", "==", "active")
+        .limit(1)
+        .get();
+
+    if (!existingSession.empty) {
+        const existing = existingSession.docs[0];
+        return { matchFound: true, sessionId: existing.id, resumed: true };
+    }
 
     const giversSnapshot = await db.collection("users")
         .where("role", "in", ["giver", "both"])
@@ -30,30 +43,24 @@ exports.matchSeekerWithGiver = functions.https.onCall(async (data, context) => {
     let highestScore = -1;
 
     giversSnapshot.forEach(doc => {
+        if (doc.id === seekerId) return;
         const giver = doc.data();
-        if (doc.id === seekerId) return; // Cannot match with self
-
-        let score = 0;
         const giverTags = giver.emotionTags || [];
-        const overlap = tags ? tags.filter(t => giverTags.includes(t)).length : 0;
-        score += overlap * 35; // 35% weight for topic overlap
-        score += (giver.rating || 5.0) * 10; // 10% weight for ratings
-        score += 20; // 20% base for being online
-
+        const overlap = tags.filter(t => giverTags.includes(t)).length;
+        const score = (overlap * 35) + ((giver.rating || 5.0) * 10) + 20;
         if (score > highestScore) {
             highestScore = score;
-            bestGiver = { id: doc.id, ...giver };
+            bestGiver = { id: doc.id, displayName: giver.displayName };
         }
     });
 
-    if (!bestGiver) return { matchFound: false };
+    if (!bestGiver) return { matchFound: false, message: "No suitable listener found." };
 
-    // Create active session
     const sessionRef = await db.collection("sessions").add({
-        seekerId: seekerId,
+        seekerId,
         giverId: bestGiver.id,
         status: "active",
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: admin.firestore.Timestamp.now(),
         identityRevealed: false
     });
 
@@ -61,38 +68,48 @@ exports.matchSeekerWithGiver = functions.https.onCall(async (data, context) => {
 });
 
 /**
- * 2. 30-Day Auto-Delete Daily Cron Job (Optimized concurrent batching)
+ * 2. 30-Day Auto-Delete — Chunked batch to stay under 500-op Firestore limit
  */
-exports.purgeExpiredChats = functions.pubsub.schedule("every 24 hours").onRun(async (context) => {
-    const thirtyDaysAgo = new Date(Date.now() - (30 * 24 * 60 * 60 * 1000));
-    
+exports.purgeExpiredChats = functions.pubsub.schedule("every 24 hours").onRun(async () => {
+    const thirtyDaysAgo = admin.firestore.Timestamp.fromMillis(
+        Date.now() - (30 * 24 * 60 * 60 * 1000)
+    );
+
     const expiredSessions = await db.collection("sessions")
         .where("createdAt", "<=", thirtyDaysAgo)
         .limit(100)
         .get();
 
-    if (expiredSessions.empty) return null;
+    if (expiredSessions.empty) {
+        console.log("No expired sessions to purge.");
+        return null;
+    }
 
-    const batch = db.batch();
-    
-    // Fetch all subcollection messages in parallel
-    const subcollectionPromises = expiredSessions.docs.map(async (sessionDoc) => {
+    // Collect all delete refs
+    const allRefs = [];
+    for (const sessionDoc of expiredSessions.docs) {
         const messages = await sessionDoc.ref.collection("messages").get();
-        messages.forEach(msg => batch.delete(msg.ref));
-        batch.delete(sessionDoc.ref);
-    });
+        messages.forEach(msg => allRefs.push(msg.ref));
+        allRefs.push(sessionDoc.ref);
+    }
 
-    await Promise.all(subcollectionPromises);
-    await batch.commit();
-    console.log(`Successfully purged ${expiredSessions.size} expired chat sessions.`);
+    // Chunk into batches of MAX_BATCH_SIZE
+    for (let i = 0; i < allRefs.length; i += MAX_BATCH_SIZE) {
+        const chunk = allRefs.slice(i, i + MAX_BATCH_SIZE);
+        const batch = db.batch();
+        chunk.forEach(ref => batch.delete(ref));
+        await batch.commit();
+    }
+
+    console.log(`Purged ${expiredSessions.size} sessions (${allRefs.length} total documents).`);
     return null;
 });
 
 /**
- * 3. Moderation Alert Webhook
+ * 3. Moderation Alert — Log sanitized metadata only (no PII)
  */
 exports.onReportSubmitted = functions.firestore.document("reports/{reportId}").onCreate(async (snap, context) => {
-    const report = snap.data();
-    console.warn(`[SAFETY ALERT] User ${report.reportedUserId} reported by ${report.reporterId} for: ${report.reason}`);
+    // Log only report ID and timestamp — never log raw reason or user content
+    console.warn(`[SAFETY ALERT] Report submitted: documentId=${context.params.reportId}, timestamp=${new Date().toISOString()}`);
     return null;
 });
