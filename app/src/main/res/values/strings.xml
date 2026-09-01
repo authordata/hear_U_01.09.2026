@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">HearU</string>
+    <string name="welcome_title">Welcome to HearU</string>
+    <string name="login_btn">Login</string>
+    <string name="email_label">Email</string>
+    <string name="password_label">Password</string>
+    <string name="seeker_title">I need support</string>
+    <string name="giver_title">I want to listen</string>
+    <string name="ai_companion_title">AI Companion</string>
+    <string name="find_listener_btn">Find a Listener</string>
+    <string name="chat_ai_btn">Chat with AI Companion</string>
+    <string name="sos_crisis_btn">SOS</string>
+    <string name="report_user">Report User</string>
+    <string name="block_user">Block &amp; Leave</string>
+</resources>
