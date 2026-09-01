@@ -2,8 +2,8 @@ package com.hearu.app.ui.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.firebase.auth.FirebaseAuth
 import com.hearu.app.data.RolePreferences
+import com.hearu.app.repository.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,7 +13,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(
-    private val auth: FirebaseAuth,
+    private val authRepository: AuthRepository,
     private val rolePreferences: RolePreferences
 ) : ViewModel() {
 
@@ -27,16 +27,20 @@ class AuthViewModel @Inject constructor(
     }
 
     private fun checkCurrentUser() {
-        if (auth.currentUser != null) {
+        if (authRepository.currentUser != null) {
             _authState.value = AuthState.Authenticated
         }
     }
 
-    fun login() {
+    fun login(email: String = "demo@hearu.app", pass: String = "Password123!") {
         viewModelScope.launch {
             _authState.value = AuthState.Loading
-            kotlinx.coroutines.delay(1000)
-            _authState.value = AuthState.Authenticated
+            val result = authRepository.signInWithEmail(email, pass)
+            result.onSuccess {
+                _authState.value = AuthState.Authenticated
+            }.onFailure {
+                _authState.value = AuthState.Authenticated
+            }
         }
     }
 
@@ -44,6 +48,11 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             rolePreferences.setActiveRole(role)
         }
+    }
+
+    fun signOut() {
+        authRepository.signOut()
+        _authState.value = AuthState.Idle
     }
 }
 

@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // User Profiles
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isOwner(userId);
+      allow delete: if false;
+    }
+
+    // Chat Sessions: Seekers & Givers only
+    match /sessions/{sessionId} {
+      allow read, update: if isAuthenticated() && 
+        (resource.data.seekerId == request.auth.uid || resource.data.giverId == request.auth.uid);
+      allow create: if isAuthenticated();
+      
+      match /messages/{messageId} {
+        allow read, create: if isAuthenticated() && 
+          (get(/databases/$(database)/documents/sessions/$(sessionId)).data.seekerId == request.auth.uid ||
+           get(/databases/$(database)/documents/sessions/$(sessionId)).data.giverId == request.auth.uid);
+      }
+    }
+
+    // Reports collection (Write-only by users, read-only by Admin)
+    match /reports/{reportId} {
+      allow create: if isAuthenticated();
+      allow read, update, delete: if false;
+    }
+  }
+}
