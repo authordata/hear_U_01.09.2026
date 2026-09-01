@@ -5,13 +5,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
+import com.hearu.app.R
+import com.hearu.app.ui.theme.HearUTheme
 
 @Composable
 fun LoginScreen(
-    onLoginSuccess: () -> Unit
+    onLoginSubmit: (String, String) -> Unit
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -25,7 +29,7 @@ fun LoginScreen(
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            text = "Welcome to HearU",
+            text = stringResource(R.string.welcome_title),
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.primary
         )
@@ -35,8 +39,8 @@ fun LoginScreen(
         OutlinedTextField(
             value = email,
             onValueChange = { email = it },
-            label = { Text("Email") },
-            modifier = Modifier.fillMaxWidth(),
+            label = { Text(stringResource(R.string.email_label)) },
+            modifier = Modifier.fillMaxWidth().testTag("email_field"),
             singleLine = true
         )
         
@@ -45,9 +49,9 @@ fun LoginScreen(
         OutlinedTextField(
             value = password,
             onValueChange = { password = it },
-            label = { Text("Password") },
+            label = { Text(stringResource(R.string.password_label)) },
             visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().testTag("password_field"),
             singleLine = true
         )
         
@@ -56,12 +60,12 @@ fun LoginScreen(
         Button(
             onClick = { 
                 isLoading = true
-                // Simulate network delay for login
-                onLoginSuccess() 
+                onLoginSubmit(email, password)
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp),
+                .height(50.dp)
+                .testTag("login_button"),
             enabled = !isLoading && email.isNotBlank() && password.isNotBlank()
         ) {
             if (isLoading) {
@@ -70,7 +74,7 @@ fun LoginScreen(
                     color = MaterialTheme.colorScheme.onPrimary
                 )
             } else {
-                Text("Login")
+                Text(stringResource(R.string.login_btn))
             }
         }
     }
@@ -79,7 +83,7 @@ fun LoginScreen(
 @Preview(showBackground = true)
 @Composable
 fun LoginScreenPreview() {
-    MaterialTheme {
-        LoginScreen(onLoginSuccess = {})
+    HearUTheme {
+        LoginScreen(onLoginSubmit = { _, _ -> })
     }
 }

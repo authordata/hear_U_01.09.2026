@@ -39,8 +39,8 @@ fun HearUNavigation(
 
     NavHost(navController = navController, startDestination = Screen.Login.route) {
         composable(Screen.Login.route) {
-            LoginScreen(onLoginSuccess = { 
-                authViewModel.login()
+            LoginScreen(onLoginSubmit = { email, pass ->
+                authViewModel.login(email, pass)
                 navController.navigate(Screen.RoleSelection.route) {
                     popUpTo(Screen.Login.route) { inclusive = true }
                 }

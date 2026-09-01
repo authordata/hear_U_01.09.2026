@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hearu.app.ai.AiResult
 import com.hearu.app.ai.GeminiAiService
+import com.hearu.app.data.RolePreferences
 import com.hearu.app.model.Message
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,7 +15,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class AIChatViewModel @Inject constructor(
-    private val geminiService: GeminiAiService
+    private val geminiService: GeminiAiService,
+    private val preferences: RolePreferences
 ) : ViewModel() {
 
     private val _messages = MutableStateFlow<List<Message>>(emptyList())
@@ -26,7 +28,9 @@ class AIChatViewModel @Inject constructor(
     private val _crisisEvent = MutableStateFlow(false)
     val crisisEvent: StateFlow<Boolean> = _crisisEvent.asStateFlow()
 
-    private var messagesUsedToday = 0
+    private val _quotaExhausted = MutableStateFlow(false)
+    val quotaExhausted: StateFlow<Boolean> = _quotaExhausted.asStateFlow()
+
     private val MESSAGE_LIMIT = 50
 
     init {
@@ -45,18 +49,32 @@ class AIChatViewModel @Inject constructor(
     }
 
     fun sendMessage(text: String) {
-        if (text.isBlank() || messagesUsedToday >= MESSAGE_LIMIT) return
-
-        val userMsg = Message(
-            id = "user_${System.currentTimeMillis()}",
-            senderId = "user123",
-            text = text,
-            timestamp = System.currentTimeMillis()
-        )
-        _messages.value = _messages.value + userMsg
-        messagesUsedToday++
+        if (text.isBlank()) return
 
         viewModelScope.launch {
+            val usedToday = preferences.getAiMessagesUsedToday()
+            if (usedToday >= MESSAGE_LIMIT) {
+                _quotaExhausted.value = true
+                val limitMsg = Message(
+                    id = "limit_${System.currentTimeMillis()}",
+                    senderId = "ai_companion",
+                    text = "You've reached your daily quota of $MESSAGE_LIMIT AI messages. To ensure quality support, please connect with our human listeners!",
+                    timestamp = System.currentTimeMillis()
+                )
+                _messages.value = _messages.value + limitMsg
+                return@launch
+            }
+
+            preferences.incrementAiMessageCount()
+
+            val userMsg = Message(
+                id = "user_${System.currentTimeMillis()}",
+                senderId = "user123",
+                text = text,
+                timestamp = System.currentTimeMillis()
+            )
+            _messages.value = _messages.value + userMsg
+
             _isLoading.value = true
             when (val result = geminiService.generateEmpatheticResponse(text)) {
                 is AiResult.Success -> {

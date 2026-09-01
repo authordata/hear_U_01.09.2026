@@ -2,6 +2,7 @@ package com.hearu.app
 
 import com.hearu.app.ai.AiResult
 import com.hearu.app.ai.GeminiAiService
+import com.hearu.app.data.RolePreferences
 import com.hearu.app.ui.chat.AIChatViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -23,12 +24,17 @@ class AIChatViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
     private val geminiService: GeminiAiService = mock()
+    private val preferences: RolePreferences = mock()
     private lateinit var viewModel: AIChatViewModel
 
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
-        viewModel = AIChatViewModel(geminiService)
+        runTest(testDispatcher) {
+            whenever(preferences.getAiMessagesUsedToday()).thenReturn(0)
+            whenever(preferences.incrementAiMessageCount()).thenReturn(1)
+        }
+        viewModel = AIChatViewModel(geminiService, preferences)
     }
 
     @After
