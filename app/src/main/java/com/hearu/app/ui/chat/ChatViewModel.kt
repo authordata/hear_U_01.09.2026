@@ -10,6 +10,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -22,34 +23,49 @@ class ChatViewModel @Inject constructor(
     private val _messages = MutableStateFlow<List<Message>>(emptyList())
     val messages: StateFlow<List<Message>> = _messages.asStateFlow()
 
+    private val _errorState = MutableStateFlow<String?>(null)
+    val errorState: StateFlow<String?> = _errorState.asStateFlow()
+
+    private val _isSending = MutableStateFlow(false)
+    val isSending: StateFlow<Boolean> = _isSending.asStateFlow()
+
     private var currentSessionId: String = ""
-    private var currentUserId: String = auth.currentUser?.uid ?: ""
     private var messageJob: Job? = null
 
     fun joinSession(sessionId: String, userId: String) {
         currentSessionId = sessionId
-        currentUserId = userId.ifBlank { auth.currentUser?.uid ?: "" }
-        
         messageJob?.cancel()
         messageJob = viewModelScope.launch {
-            chatRepository.getMessages(sessionId).collect { msgs ->
-                _messages.value = msgs
-            }
+            chatRepository.getMessages(sessionId)
+                .catch { e -> _errorState.value = "Failed to load messages: ${e.message}" }
+                .collect { msgs -> _messages.value = msgs }
         }
     }
 
     fun sendMessage(text: String) {
         if (text.isBlank() || currentSessionId.isBlank()) return
-        val sender = currentUserId.ifBlank { auth.currentUser?.uid ?: "anonymous" }
+        val sender = auth.currentUser?.uid ?: run {
+            _errorState.value = "Session expired. Please log in again."
+            return
+        }
         viewModelScope.launch {
-            val msg = Message(
-                senderId = sender,
-                text = text,
-                timestamp = System.currentTimeMillis()
-            )
-            chatRepository.sendMessage(currentSessionId, msg)
+            _isSending.value = true
+            try {
+                val msg = Message(
+                    senderId = sender,
+                    text = text,
+                    timestamp = System.currentTimeMillis()
+                )
+                chatRepository.sendMessage(currentSessionId, msg)
+            } catch (e: Exception) {
+                _errorState.value = "Failed to send message: ${e.message}"
+            } finally {
+                _isSending.value = false
+            }
         }
     }
+
+    fun clearError() { _errorState.value = null }
 
     override fun onCleared() {
         super.onCleared()

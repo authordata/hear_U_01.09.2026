@@ -7,9 +7,9 @@ import com.hearu.app.data.local.entity.MessageEntity
 import com.hearu.app.model.Message
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
@@ -20,41 +20,56 @@ class ChatRepository @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val messageDao: MessageDao
 ) {
-    fun getMessages(sessionId: String): Flow<List<Message>> = callbackFlow {
-        val listener = firestore.collection("sessions")
-            .document(sessionId)
-            .collection("messages")
-            .orderBy("timestamp", Query.Direction.ASCENDING)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    close(error)
-                    return@addSnapshotListener
-                }
-                val messages = snapshot?.toObjects(Message::class.java) ?: emptyList()
-                
-                CoroutineScope(Dispatchers.IO).launch {
-                    val entities = messages.map {
+    // Repository-scoped supervisor scope — not tied to any single Flow or ViewModel
+    private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * Returns Room as Single Source of Truth.
+     * Firestore listener syncs to Room in background — UI always reads from local DB.
+     */
+    fun getMessages(sessionId: String): Flow<List<Message>> {
+        // Start Firestore sync in background
+        startFirestoreSync(sessionId)
+        // Return Room as SSOT — offline-capable
+        return messageDao.getMessagesForSession(sessionId).map { entities ->
+            entities.map { it.toDomain() }
+        }
+    }
+
+    private fun startFirestoreSync(sessionId: String) {
+        repositoryScope.launch {
+            firestore.collection("sessions")
+                .document(sessionId)
+                .collection("messages")
+                .orderBy("timestamp", Query.Direction.ASCENDING)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null || snapshot == null) return@addSnapshotListener
+                    val entities = snapshot.documents.mapNotNull { doc ->
+                        val msg = doc.toObject(Message::class.java) ?: return@mapNotNull null
                         MessageEntity(
-                            id = it.id,
+                            id = doc.id,
                             sessionId = sessionId,
-                            senderId = it.senderId,
-                            text = it.text,
-                            timestamp = it.timestamp,
-                            isSystemMessage = it.isSystemMessage
+                            senderId = msg.senderId,
+                            text = msg.text,
+                            timestamp = msg.timestamp,
+                            isSystemMessage = msg.isSystemMessage
                         )
                     }
-                    messageDao.insertMessages(entities)
+                    repositoryScope.launch {
+                        messageDao.insertMessages(entities)
+                    }
                 }
-
-                trySend(messages)
-            }
-        awaitClose { listener.remove() }
+        }
     }
 
     suspend fun sendMessage(sessionId: String, message: Message) {
-        val docRef = firestore.collection("sessions").document(sessionId).collection("messages").document()
+        val docRef = firestore.collection("sessions")
+            .document(sessionId)
+            .collection("messages")
+            .document()
         val messageWithId = message.copy(id = docRef.id)
 
+        // Optimistic local insert (Room = SSOT, so UI will see it immediately)
         messageDao.insertMessage(
             MessageEntity(
                 id = messageWithId.id,
@@ -65,7 +80,7 @@ class ChatRepository @Inject constructor(
                 isSystemMessage = messageWithId.isSystemMessage
             )
         )
-
+        // Remote sync
         docRef.set(messageWithId).await()
     }
 
@@ -73,4 +88,16 @@ class ChatRepository @Inject constructor(
         firestore.collection("sessions").document(sessionId)
             .update("status", status).await()
     }
+
+    suspend fun clearLocalSession(sessionId: String) {
+        messageDao.clearSession(sessionId)
+    }
 }
+
+private fun MessageEntity.toDomain(): Message = Message(
+    id = id,
+    senderId = senderId,
+    text = text,
+    timestamp = timestamp,
+    isSystemMessage = isSystemMessage
+)
