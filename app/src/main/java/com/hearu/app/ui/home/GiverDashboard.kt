@@ -1,6 +1,8 @@
 package com.hearu.app.ui.home
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -8,14 +10,21 @@ import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GiverDashboard() {
+fun GiverDashboard(
+    onNavigateToProfile: () -> Unit = {}
+) {
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("HearU - Giver") },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.secondaryContainer
-                )
+                ),
+                actions = {
+                    IconButton(onClick = onNavigateToProfile) {
+                        Icon(Icons.Default.Person, contentDescription = "Profile")
+                    }
+                }
             )
         }
     ) { padding ->

@@ -16,6 +16,7 @@ import com.hearu.app.ui.home.GiverDashboard
 import com.hearu.app.ui.home.SeekerDashboard
 import com.hearu.app.ui.chat.ChatScreen
 import com.hearu.app.ui.chat.AIChatScreen
+import com.hearu.app.ui.home.ProfileScreen
 
 @Composable
 fun HearUNavigation(
@@ -43,12 +44,12 @@ fun HearUNavigation(
             })
         }
         composable("seeker_home") { 
-            SeekerDashboard(
+            SeekerDashboard(onNavigateToProfile = { navController.navigate("profile") }, 
                 onNavigateToAIChat = { navController.navigate("ai_chat") },
                 onNavigateToMatch = { navController.navigate("chat/temp_session_123/user123") }
             ) 
         }
-        composable("giver_home") { GiverDashboard() }
+        composable("giver_home") { GiverDashboard(onNavigateToProfile = { navController.navigate("profile") }) }
         
         composable(
             route = "chat/{sessionId}/{userId}",
@@ -66,6 +67,10 @@ fun HearUNavigation(
             )
         }
         
+        composable("profile") {            ProfileScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+
         composable("ai_chat") {
             AIChatScreen(onNavigateBack = { navController.popBackStack() })
         }
