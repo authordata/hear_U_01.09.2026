@@ -32,14 +32,34 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    fun login(email: String = "demo@hearu.app", pass: String = "Password123!") {
+    fun login(email: String, pass: String) {
+        if (email.isBlank() || pass.isBlank()) {
+            _authState.value = AuthState.Error("Email and password cannot be empty.")
+            return
+        }
         viewModelScope.launch {
             _authState.value = AuthState.Loading
             val result = authRepository.signInWithEmail(email, pass)
             result.onSuccess {
                 _authState.value = AuthState.Authenticated
-            }.onFailure {
+            }.onFailure { error ->
+                _authState.value = AuthState.Error(error.localizedMessage ?: "Login failed. Please try again.")
+            }
+        }
+    }
+
+    fun register(email: String, pass: String) {
+        if (email.isBlank() || pass.isBlank()) {
+            _authState.value = AuthState.Error("Email and password cannot be empty.")
+            return
+        }
+        viewModelScope.launch {
+            _authState.value = AuthState.Loading
+            val result = authRepository.signUpWithEmail(email, pass)
+            result.onSuccess {
                 _authState.value = AuthState.Authenticated
+            }.onFailure { error ->
+                _authState.value = AuthState.Error(error.localizedMessage ?: "Registration failed. Please try again.")
             }
         }
     }
@@ -53,6 +73,12 @@ class AuthViewModel @Inject constructor(
     fun signOut() {
         authRepository.signOut()
         _authState.value = AuthState.Idle
+    }
+
+    fun clearError() {
+        if (_authState.value is AuthState.Error) {
+            _authState.value = AuthState.Idle
+        }
     }
 }
 

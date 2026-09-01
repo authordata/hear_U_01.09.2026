@@ -1,5 +1,6 @@
 package com.hearu.app.ui.auth
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -10,16 +11,22 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hearu.app.R
 import com.hearu.app.ui.theme.HearUTheme
 
 @Composable
 fun LoginScreen(
-    onLoginSubmit: (String, String) -> Unit
+    onLoginSubmit: (String, String) -> Unit,
+    viewModel: AuthViewModel = hiltViewModel()
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(false) }
+    val authState by viewModel.authState.collectAsStateWithLifecycle()
+
+    val isLoading = authState is AuthState.Loading
+    val errorMessage = (authState as? AuthState.Error)?.message
 
     Column(
         modifier = Modifier
@@ -33,35 +40,41 @@ fun LoginScreen(
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.primary
         )
-        
+
         Spacer(modifier = Modifier.height(32.dp))
-        
+
         OutlinedTextField(
             value = email,
-            onValueChange = { email = it },
+            onValueChange = { email = it; viewModel.clearError() },
             label = { Text(stringResource(R.string.email_label)) },
             modifier = Modifier.fillMaxWidth().testTag("email_field"),
-            singleLine = true
+            singleLine = true,
+            isError = errorMessage != null
         )
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         OutlinedTextField(
             value = password,
-            onValueChange = { password = it },
+            onValueChange = { password = it; viewModel.clearError() },
             label = { Text(stringResource(R.string.password_label)) },
             visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth().testTag("password_field"),
-            singleLine = true
+            singleLine = true,
+            isError = errorMessage != null
         )
-        
+
+        AnimatedVisibility(visible = errorMessage != null) {
+            errorMessage?.let {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+
         Spacer(modifier = Modifier.height(32.dp))
-        
+
         Button(
-            onClick = { 
-                isLoading = true
-                onLoginSubmit(email, password)
-            },
+            onClick = { onLoginSubmit(email, password) },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp)
