@@ -1,1 +1,103 @@
-cGFja2FnZSBjb20uaGVhcnUuYXBwLnVpLmF1dGgKCmltcG9ydCBhbmRyb2lkLnV0aWwuUGF0dGVybnMKaW1wb3J0IGFuZHJvaWR4LmxpZmVjeWNsZS5WaWV3TW9kZWwKaW1wb3J0IGFuZHJvaWR4LmxpZmVjeWNsZS52aWV3TW9kZWxTY29wZQppbXBvcnQgY29tLmhlYXJ1LmFwcC5kYXRhLlJvbGVQcmVmZXJlbmNlcwppbXBvcnQgY29tLmhlYXJ1LmFwcC5yZXBvc2l0b3J5LkF1dGhSZXBvc2l0b3J5CmltcG9ydCBkYWdnZXIuaGlsdC5hbmRyb2lkLmxpZmVjeWNsZS5IaWx0Vmlld01vZGVsCmltcG9ydCBrb3RsaW54LmNvcm91dGluZXMuZmxvdy5NdXRhYmxlU3RhdGVGbG93CmltcG9ydCBrb3RsaW54LmNvcm91dGluZXMuZmxvdy5TdGF0ZUZsb3cKaW1wb3J0IGtvdGxpbnguY29yb3V0aW5lcy5mbG93LmFzU3RhdGVGbG93CmltcG9ydCBrb3RsaW54LmNvcm91dGluZXMubGF1bmNoCmltcG9ydCBqYXZheC5pbmplY3QuSW5qZWN0CgpASGlsdFZpZXdNb2RlbApjbGFzcyBBdXRoVmlld01vZGVsIEBJbmplY3QgY29uc3RydWN0b3IoCiAgICBwcml2YXRlIHZhbCBhdXRoUmVwb3NpdG9yeTogQXV0aFJlcG9zaXRvcnksCiAgICBwcml2YXRlIHZhbCByb2xlUHJlZmVyZW5jZXM6IFJvbGVQcmVmZXJlbmNlcwopIDogVmlld01vZGVsKCkgewoKICAgIHZhbCBhY3RpdmVSb2xlID0gcm9sZVByZWZlcmVuY2VzLmFjdGl2ZVJvbGVGbG93CgogICAgcHJpdmF0ZSB2YWwgX2F1dGhTdGF0ZSA9IE11dGFibGVTdGF0ZUZsb3c8QXV0aFN0YXRlPihBdXRoU3RhdGUuSWRsZSkKICAgIHZhbCBhdXRoU3RhdGU6IFN0YXRlRmxvdzxBdXRoU3RhdGU+ID0gX2F1dGhTdGF0ZS5hc1N0YXRlRmxvdygpCgogICAgaW5pdCB7CiAgICAgICAgY2hlY2tDdXJyZW50VXNlcigpCiAgICB9CgogICAgcHJpdmF0ZSBmdW4gY2hlY2tDdXJyZW50VXNlcigpIHsKICAgICAgICBpZiAoYXV0aFJlcG9zaXRvcnkuY3VycmVudFVzZXIgIT0gbnVsbCkgewogICAgICAgICAgICBfYXV0aFN0YXRlLnZhbHVlID0gQXV0aFN0YXRlLkF1dGhlbnRpY2F0ZWQKICAgICAgICB9CiAgICB9CgogICAgZnVuIGxvZ2luKGVtYWlsOiBTdHJpbmcsIHBhc3M6IFN0cmluZykgewogICAgICAgIHdoZW4gewogICAgICAgICAgICBlbWFpbC5pc0JsYW5rKCkgfHwgcGFzcy5pc0JsYW5rKCkgLT4gewogICAgICAgICAgICAgICAgX2F1dGhTdGF0ZS52YWx1ZSA9IEF1dGhTdGF0ZS5FcnJvcigiRW1haWwgYW5kIHBhc3N3b3JkIGFyZSByZXF1aXJlZC4iKQogICAgICAgICAgICAgICAgcmV0dXJuCiAgICAgICAgICAgIH0KICAgICAgICAgICAgIVBhdHRlcm5zLkVNQUlMX0FERFJFU1MubWF0Y2hlcihlbWFpbCkubWF0Y2hlcygpIC0+IHsKICAgICAgICAgICAgICAgIF9hdXRoU3RhdGUudmFsdWUgPSBBdXRoU3RhdGUuRXJyb3IoIlBsZWFzZSBlbnRlciBhIHZhbGlkIGVtYWlsIGFkZHJlc3MuIikKICAgICAgICAgICAgICAgIHJldHVybgogICAgICAgICAgICB9CiAgICAgICAgICAgIHBhc3MubGVuZ3RoIDwgOCAtPiB7CiAgICAgICAgICAgICAgICBfYXV0aFN0YXRlLnZhbHVlID0gQXV0aFN0YXRlLkVycm9yKCJQYXNzd29yZCBtdXN0IGJlIGF0IGxlYXN0IDggY2hhcmFjdGVycy4iKQogICAgICAgICAgICAgICAgcmV0dXJuCiAgICAgICAgICAgIH0KICAgICAgICB9CiAgICAgICAgdmlld01vZGVsU2NvcGUubGF1bmNoIHsKICAgICAgICAgICAgX2F1dGhTdGF0ZS52YWx1ZSA9IEF1dGhTdGF0ZS5Mb2FkaW5nCiAgICAgICAgICAgIGF1dGhSZXBvc2l0b3J5LnNpZ25JbldpdGhFbWFpbChlbWFpbCwgcGFzcykKICAgICAgICAgICAgICAgIC5vblN1Y2Nlc3MgeyBfYXV0aFN0YXRlLnZhbHVlID0gQXV0aFN0YXRlLkF1dGhlbnRpY2F0ZWQgfQogICAgICAgICAgICAgICAgLm9uRmFpbHVyZSB7IF9hdXRoU3RhdGUudmFsdWUgPSBBdXRoU3RhdGUuRXJyb3IoaXQubG9jYWxpemVkTWVzc2FnZSA/OiAiTG9naW4gZmFpbGVkLiIpIH0KICAgICAgICB9CiAgICB9CgogICAgZnVuIHJlZ2lzdGVyKGVtYWlsOiBTdHJpbmcsIHBhc3M6IFN0cmluZykgewogICAgICAgIHdoZW4gewogICAgICAgICAgICBlbWFpbC5pc0JsYW5rKCkgfHwgcGFzcy5pc0JsYW5rKCkgLT4gewogICAgICAgICAgICAgICAgX2F1dGhTdGF0ZS52YWx1ZSA9IEF1dGhTdGF0ZS5FcnJvcigiRW1haWwgYW5kIHBhc3N3b3JkIGFyZSByZXF1aXJlZC4iKQogICAgICAgICAgICAgICAgcmV0dXJuCiAgICAgICAgICAgIH0KICAgICAgICAgICAgIVBhdHRlcm5zLkVNQUlMX0FERFJFU1MubWF0Y2hlcihlbWFpbCkubWF0Y2hlcygpIC0+IHsKICAgICAgICAgICAgICAgIF9hdXRoU3RhdGUudmFsdWUgPSBBdXRoU3RhdGUuRXJyb3IoIlBsZWFzZSBlbnRlciBhIHZhbGlkIGVtYWlsIGFkZHJlc3MuIikKICAgICAgICAgICAgICAgIHJldHVybgogICAgICAgICAgICB9CiAgICAgICAgICAgIHBhc3MubGVuZ3RoIDwgOCAtPiB7CiAgICAgICAgICAgICAgICBfYXV0aFN0YXRlLnZhbHVlID0gQXV0aFN0YXRlLkVycm9yKCJQYXNzd29yZCBtdXN0IGJlIGF0IGxlYXN0IDggY2hhcmFjdGVycy4iKQogICAgICAgICAgICAgICAgcmV0dXJuCiAgICAgICAgICAgIH0KICAgICAgICB9CiAgICAgICAgdmlld01vZGVsU2NvcGUubGF1bmNoIHsKICAgICAgICAgICAgX2F1dGhTdGF0ZS52YWx1ZSA9IEF1dGhTdGF0ZS5Mb2FkaW5nCiAgICAgICAgICAgIGF1dGhSZXBvc2l0b3J5LnNpZ25VcFdpdGhFbWFpbChlbWFpbCwgcGFzcykKICAgICAgICAgICAgICAgIC5vblN1Y2Nlc3MgeyBfYXV0aFN0YXRlLnZhbHVlID0gQXV0aFN0YXRlLkF1dGhlbnRpY2F0ZWQgfQogICAgICAgICAgICAgICAgLm9uRmFpbHVyZSB7IF9hdXRoU3RhdGUudmFsdWUgPSBBdXRoU3RhdGUuRXJyb3IoaXQubG9jYWxpemVkTWVzc2FnZSA/OiAiUmVnaXN0cmF0aW9uIGZhaWxlZC4iKSB9CiAgICAgICAgfQogICAgfQoKICAgIGZ1biBzYXZlUm9sZShyb2xlOiBTdHJpbmcpIHsKICAgICAgICB2aWV3TW9kZWxTY29wZS5sYXVuY2ggewogICAgICAgICAgICByb2xlUHJlZmVyZW5jZXMuc2V0QWN0aXZlUm9sZShyb2xlKQogICAgICAgIH0KICAgIH0KCiAgICBmdW4gc2lnbk91dCgpIHsKICAgICAgICBhdXRoUmVwb3NpdG9yeS5zaWduT3V0KCkKICAgICAgICBfYXV0aFN0YXRlLnZhbHVlID0gQXV0aFN0YXRlLklkbGUKICAgIH0KCiAgICBmdW4gY2xlYXJFcnJvcigpIHsKICAgICAgICBpZiAoX2F1dGhTdGF0ZS52YWx1ZSBpcyBBdXRoU3RhdGUuRXJyb3IpIF9hdXRoU3RhdGUudmFsdWUgPSBBdXRoU3RhdGUuSWRsZQogICAgfQp9CgpzZWFsZWQgY2xhc3MgQXV0aFN0YXRlIHsKICAgIGRhdGEgb2JqZWN0IElkbGUgOiBBdXRoU3RhdGUoKQogICAgZGF0YSBvYmplY3QgTG9hZGluZyA6IEF1dGhTdGF0ZSgpCiAgICBkYXRhIG9iamVjdCBBdXRoZW50aWNhdGVkIDogQXV0aFN0YXRlKCkKICAgIGRhdGEgY2xhc3MgRXJyb3IodmFsIG1lc3NhZ2U6IFN0cmluZykgOiBBdXRoU3RhdGUoKQp9Cg==
+package com.hearu.app.ui.auth
+
+import android.util.Patterns
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.hearu.app.data.RolePreferences
+import com.hearu.app.repository.AuthRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+
+@HiltViewModel
+class AuthViewModel @Inject constructor(
+    private val authRepository: AuthRepository,
+    private val rolePreferences: RolePreferences
+) : ViewModel() {
+
+    val activeRole = rolePreferences.activeRoleFlow
+
+    private val _authState = MutableStateFlow<AuthState>(AuthState.Idle)
+    val authState: StateFlow<AuthState> = _authState.asStateFlow()
+
+    init {
+        checkCurrentUser()
+    }
+
+    private fun checkCurrentUser() {
+        if (authRepository.currentUser != null) {
+            _authState.value = AuthState.Authenticated
+        }
+    }
+
+    fun login(email: String, pass: String) {
+        when {
+            email.isBlank() || pass.isBlank() -> {
+                _authState.value = AuthState.Error("Email and password are required.")
+                return
+            }
+            !Patterns.EMAIL_ADDRESS.matcher(email).matches() -> {
+                _authState.value = AuthState.Error("Please enter a valid email address.")
+                return
+            }
+            pass.length < 8 -> {
+                _authState.value = AuthState.Error("Password must be at least 8 characters.")
+                return
+            }
+        }
+        viewModelScope.launch {
+            _authState.value = AuthState.Loading
+            authRepository.signInWithEmail(email, pass)
+                .onSuccess { _authState.value = AuthState.Authenticated }
+                .onFailure { _authState.value = AuthState.Error(it.localizedMessage ?: "Login failed.") }
+        }
+    }
+
+    fun register(email: String, pass: String) {
+        when {
+            email.isBlank() || pass.isBlank() -> {
+                _authState.value = AuthState.Error("Email and password are required.")
+                return
+            }
+            !Patterns.EMAIL_ADDRESS.matcher(email).matches() -> {
+                _authState.value = AuthState.Error("Please enter a valid email address.")
+                return
+            }
+            pass.length < 8 -> {
+                _authState.value = AuthState.Error("Password must be at least 8 characters.")
+                return
+            }
+        }
+        viewModelScope.launch {
+            _authState.value = AuthState.Loading
+            authRepository.signUpWithEmail(email, pass)
+                .onSuccess { _authState.value = AuthState.Authenticated }
+                .onFailure { _authState.value = AuthState.Error(it.localizedMessage ?: "Registration failed.") }
+        }
+    }
+
+    fun saveRole(role: String) {
+        viewModelScope.launch {
+            rolePreferences.setActiveRole(role)
+        }
+    }
+
+    fun signOut() {
+        authRepository.signOut()
+        _authState.value = AuthState.Idle
+    }
+
+    fun clearError() {
+        if (_authState.value is AuthState.Error) _authState.value = AuthState.Idle
+    }
+}
+
+sealed class AuthState {
+    data object Idle : AuthState()
+    data object Loading : AuthState()
+    data object Authenticated : AuthState()
+    data class Error(val message: String) : AuthState()
+}

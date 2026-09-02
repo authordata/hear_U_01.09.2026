@@ -1,1 +1,90 @@
-cGFja2FnZSBjb20uaGVhcnUuYXBwLnVpLmF1dGgKCmltcG9ydCBhbmRyb2lkeC5jb21wb3NlLmFuaW1hdGlvbi5BbmltYXRlZFZpc2liaWxpdHkKaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UuZm91bmRhdGlvbi5sYXlvdXQuKgppbXBvcnQgYW5kcm9pZHguY29tcG9zZS5tYXRlcmlhbDMuKgppbXBvcnQgYW5kcm9pZHguY29tcG9zZS5ydW50aW1lLioKaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UucnVudGltZS5zYXZlYWJsZS5yZW1lbWJlclNhdmVhYmxlCmltcG9ydCBhbmRyb2lkeC5jb21wb3NlLnVpLkFsaWdubWVudAppbXBvcnQgYW5kcm9pZHguY29tcG9zZS51aS5Nb2RpZmllcgppbXBvcnQgYW5kcm9pZHguY29tcG9zZS51aS5wbGF0Zm9ybS50ZXN0VGFnCmltcG9ydCBhbmRyb2lkeC5jb21wb3NlLnVpLnJlcy5zdHJpbmdSZXNvdXJjZQppbXBvcnQgYW5kcm9pZHguY29tcG9zZS51aS50ZXh0LmlucHV0LlBhc3N3b3JkVmlzdWFsVHJhbnNmb3JtYXRpb24KaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UudWkudW5pdC5kcAppbXBvcnQgYW5kcm9pZHguY29tcG9zZS51aS50b29saW5nLnByZXZpZXcuUHJldmlldwppbXBvcnQgYW5kcm9pZHguaGlsdC5uYXZpZ2F0aW9uLmNvbXBvc2UuaGlsdFZpZXdNb2RlbAppbXBvcnQgYW5kcm9pZHgubGlmZWN5Y2xlLmNvbXBvc2UuY29sbGVjdEFzU3RhdGVXaXRoTGlmZWN5Y2xlCmltcG9ydCBjb20uaGVhcnUuYXBwLlIKaW1wb3J0IGNvbS5oZWFydS5hcHAudWkudGhlbWUuSGVhclVUaGVtZQoKQENvbXBvc2FibGUKZnVuIExvZ2luU2NyZWVuKAogICAgb25Mb2dpblN1Ym1pdDogKFN0cmluZywgU3RyaW5nKSAtPiBVbml0LAogICAgdmlld01vZGVsOiBBdXRoVmlld01vZGVsID0gaGlsdFZpZXdNb2RlbCgpCikgewogICAgdmFyIGVtYWlsIGJ5IHJlbWVtYmVyU2F2ZWFibGUgeyBtdXRhYmxlU3RhdGVPZigiIikgfQogICAgdmFyIHBhc3N3b3JkIGJ5IHJlbWVtYmVyU2F2ZWFibGUgeyBtdXRhYmxlU3RhdGVPZigiIikgfQogICAgdmFsIGF1dGhTdGF0ZSBieSB2aWV3TW9kZWwuYXV0aFN0YXRlLmNvbGxlY3RBc1N0YXRlV2l0aExpZmVjeWNsZSgpCgogICAgdmFsIGlzTG9hZGluZyA9IGF1dGhTdGF0ZSBpcyBBdXRoU3RhdGUuTG9hZGluZwogICAgdmFsIGVycm9yTWVzc2FnZSA9IChhdXRoU3RhdGUgYXM/IEF1dGhTdGF0ZS5FcnJvcik/Lm1lc3NhZ2UKCiAgICBDb2x1bW4oCiAgICAgICAgbW9kaWZpZXIgPSBNb2RpZmllcgogICAgICAgICAgICAuZmlsbE1heFNpemUoKQogICAgICAgICAgICAucGFkZGluZygyNC5kcCksCiAgICAgICAgaG9yaXpvbnRhbEFsaWdubWVudCA9IEFsaWdubWVudC5DZW50ZXJIb3Jpem9udGFsbHksCiAgICAgICAgdmVydGljYWxBcnJhbmdlbWVudCA9IEFycmFuZ2VtZW50LkNlbnRlcgogICAgKSB7CiAgICAgICAgVGV4dCgKICAgICAgICAgICAgdGV4dCA9IHN0cmluZ1Jlc291cmNlKFIuc3RyaW5nLndlbGNvbWVfdGl0bGUpLAogICAgICAgICAgICBzdHlsZSA9IE1hdGVyaWFsVGhlbWUudHlwb2dyYXBoeS5oZWFkbGluZU1lZGl1bSwKICAgICAgICAgICAgY29sb3IgPSBNYXRlcmlhbFRoZW1lLmNvbG9yU2NoZW1lLnByaW1hcnkKICAgICAgICApCiAgICAgICAgU3BhY2VyKG1vZGlmaWVyID0gTW9kaWZpZXIuaGVpZ2h0KDMyLmRwKSkKICAgICAgICBPdXRsaW5lZFRleHRGaWVsZCgKICAgICAgICAgICAgdmFsdWUgPSBlbWFpbCwKICAgICAgICAgICAgb25WYWx1ZUNoYW5nZSA9IHsgZW1haWwgPSBpdDsgdmlld01vZGVsLmNsZWFyRXJyb3IoKSB9LAogICAgICAgICAgICBsYWJlbCA9IHsgVGV4dChzdHJpbmdSZXNvdXJjZShSLnN0cmluZy5lbWFpbF9sYWJlbCkpIH0sCiAgICAgICAgICAgIG1vZGlmaWVyID0gTW9kaWZpZXIuZmlsbE1heFdpZHRoKCkudGVzdFRhZygiZW1haWxfZmllbGQiKSwKICAgICAgICAgICAgc2luZ2xlTGluZSA9IHRydWUsCiAgICAgICAgICAgIGlzRXJyb3IgPSBlcnJvck1lc3NhZ2UgIT0gbnVsbAogICAgICAgICkKICAgICAgICBTcGFjZXIobW9kaWZpZXIgPSBNb2RpZmllci5oZWlnaHQoMTYuZHApKQogICAgICAgIE91dGxpbmVkVGV4dEZpZWxkKAogICAgICAgICAgICB2YWx1ZSA9IHBhc3N3b3JkLAogICAgICAgICAgICBvblZhbHVlQ2hhbmdlID0geyBwYXNzd29yZCA9IGl0OyB2aWV3TW9kZWwuY2xlYXJFcnJvcigpIH0sCiAgICAgICAgICAgIGxhYmVsID0geyBUZXh0KHN0cmluZ1Jlc291cmNlKFIuc3RyaW5nLnBhc3N3b3JkX2xhYmVsKSkgfSwKICAgICAgICAgICAgdmlzdWFsVHJhbnNmb3JtYXRpb24gPSBQYXNzd29yZFZpc3VhbFRyYW5zZm9ybWF0aW9uKCksCiAgICAgICAgICAgIG1vZGlmaWVyID0gTW9kaWZpZXIuZmlsbE1heFdpZHRoKCkudGVzdFRhZygicGFzc3dvcmRfZmllbGQiKSwKICAgICAgICAgICAgc2luZ2xlTGluZSA9IHRydWUsCiAgICAgICAgICAgIGlzRXJyb3IgPSBlcnJvck1lc3NhZ2UgIT0gbnVsbAogICAgICAgICkKICAgICAgICBBbmltYXRlZFZpc2liaWxpdHkodmlzaWJsZSA9IGVycm9yTWVzc2FnZSAhPSBudWxsKSB7CiAgICAgICAgICAgIGVycm9yTWVzc2FnZT8ubGV0IHsKICAgICAgICAgICAgICAgIFNwYWNlcihtb2RpZmllciA9IE1vZGlmaWVyLmhlaWdodCg4LmRwKSkKICAgICAgICAgICAgICAgIFRleHQoaXQsIGNvbG9yID0gTWF0ZXJpYWxUaGVtZS5jb2xvclNjaGVtZS5lcnJvciwgc3R5bGUgPSBNYXRlcmlhbFRoZW1lLnR5cG9ncmFwaHkuYm9keVNtYWxsKQogICAgICAgICAgICB9CiAgICAgICAgfQogICAgICAgIFNwYWNlcihtb2RpZmllciA9IE1vZGlmaWVyLmhlaWdodCgzMi5kcCkpCiAgICAgICAgQnV0dG9uKAogICAgICAgICAgICBvbkNsaWNrID0geyBvbkxvZ2luU3VibWl0KGVtYWlsLCBwYXNzd29yZCkgfSwKICAgICAgICAgICAgbW9kaWZpZXIgPSBNb2RpZmllci5maWxsTWF4V2lkdGgoKS5oZWlnaHQoNTAuZHApLnRlc3RUYWcoImxvZ2luX2J1dHRvbiIpLAogICAgICAgICAgICBlbmFibGVkID0gIWlzTG9hZGluZyAmJiBlbWFpbC5pc05vdEJsYW5rKCkgJiYgcGFzc3dvcmQuaXNOb3RCbGFuaygpCiAgICAgICAgKSB7CiAgICAgICAgICAgIGlmIChpc0xvYWRpbmcpIHsKICAgICAgICAgICAgICAgIENpcmN1bGFyUHJvZ3Jlc3NJbmRpY2F0b3IobW9kaWZpZXIgPSBNb2RpZmllci5zaXplKDI0LmRwKSwgY29sb3IgPSBNYXRlcmlhbFRoZW1lLmNvbG9yU2NoZW1lLm9uUHJpbWFyeSkKICAgICAgICAgICAgfSBlbHNlIHsKICAgICAgICAgICAgICAgIFRleHQoc3RyaW5nUmVzb3VyY2UoUi5zdHJpbmcubG9naW5fYnRuKSkKICAgICAgICAgICAgfQogICAgICAgIH0KICAgIH0KfQoKQFByZXZpZXcoc2hvd0JhY2tncm91bmQgPSB0cnVlKQpAQ29tcG9zYWJsZQpmdW4gTG9naW5TY3JlZW5QcmV2aWV3KCkgewogICAgSGVhclVUaGVtZSB7CiAgICAgICAgTG9naW5TY3JlZW4ob25Mb2dpblN1Ym1pdCA9IHsgXywgXyAtPiB9KQogICAgfQp9Cg==
+package com.hearu.app.ui.auth
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.hearu.app.R
+import com.hearu.app.ui.theme.HearUTheme
+
+@Composable
+fun LoginScreen(
+    onLoginSubmit: (String, String) -> Unit,
+    viewModel: AuthViewModel = hiltViewModel()
+) {
+    var email by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    val authState by viewModel.authState.collectAsStateWithLifecycle()
+
+    val isLoading = authState is AuthState.Loading
+    val errorMessage = (authState as? AuthState.Error)?.message
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = stringResource(R.string.welcome_title),
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(modifier = Modifier.height(32.dp))
+        OutlinedTextField(
+            value = email,
+            onValueChange = { email = it; viewModel.clearError() },
+            label = { Text(stringResource(R.string.email_label)) },
+            modifier = Modifier.fillMaxWidth().testTag("email_field"),
+            singleLine = true,
+            isError = errorMessage != null
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        OutlinedTextField(
+            value = password,
+            onValueChange = { password = it; viewModel.clearError() },
+            label = { Text(stringResource(R.string.password_label)) },
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth().testTag("password_field"),
+            singleLine = true,
+            isError = errorMessage != null
+        )
+        AnimatedVisibility(visible = errorMessage != null) {
+            errorMessage?.let {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        Spacer(modifier = Modifier.height(32.dp))
+        Button(
+            onClick = { onLoginSubmit(email, password) },
+            modifier = Modifier.fillMaxWidth().height(50.dp).testTag("login_button"),
+            enabled = !isLoading && email.isNotBlank() && password.isNotBlank()
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
+            } else {
+                Text(stringResource(R.string.login_btn))
+            }
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun LoginScreenPreview() {
+    HearUTheme {
+        LoginScreen(onLoginSubmit = { _, _ -> })
+    }
+}

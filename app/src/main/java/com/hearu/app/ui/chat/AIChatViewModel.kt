@@ -33,20 +33,30 @@ class AIChatViewModel @Inject constructor(
     private val _quotaExhausted = MutableStateFlow(false)
     val quotaExhausted: StateFlow<Boolean> = _quotaExhausted.asStateFlow()
 
-    private val MESSAGE_LIMIT = 50
+    private val _quotaUsed = MutableStateFlow(0)
+    val quotaUsed: StateFlow<Int> = _quotaUsed.asStateFlow()
+
+    val MESSAGE_LIMIT = 50
+
+    val currentUserId: String
+        get() = auth.currentUser?.uid ?: "user_anonymous"
 
     init {
         _messages.value = listOf(
             Message(
                 id = "ai_welcome",
                 senderId = "ai_companion",
-                text = "Hello. I'm your HearU AI Companion. I'm here to listen without judgment. How are you feeling right now?",
+                text = "Hello, I'm your HearU AI Companion. I'm here 24/7 to listen without judgment. How is your heart feeling today?",
                 timestamp = System.currentTimeMillis()
             )
         )
-        // Check quota on init so UI disables input immediately if exhausted
+        refreshQuota()
+    }
+
+    private fun refreshQuota() {
         viewModelScope.launch {
             val used = preferences.getAiMessagesUsedToday()
+            _quotaUsed.value = used
             if (used >= MESSAGE_LIMIT) _quotaExhausted.value = true
         }
     }
@@ -55,7 +65,7 @@ class AIChatViewModel @Inject constructor(
 
     fun sendMessage(text: String) {
         if (text.isBlank() || _quotaExhausted.value) return
-        val currentUid = auth.currentUser?.uid ?: "user"
+        val currentUid = currentUserId
 
         viewModelScope.launch {
             val userMsg = Message(
@@ -69,8 +79,8 @@ class AIChatViewModel @Inject constructor(
 
             when (val result = geminiService.generateEmpatheticResponse(text)) {
                 is AiResult.Success -> {
-                    // Only consume quota on successful AI response
                     val consumed = preferences.tryConsumeAiQuota(MESSAGE_LIMIT)
+                    refreshQuota()
                     if (!consumed) {
                         _quotaExhausted.value = true
                     }
@@ -84,11 +94,10 @@ class AIChatViewModel @Inject constructor(
                     _messages.value = _messages.value + aiMsg
                 }
                 is AiResult.Error -> {
-                    // Quota NOT consumed on error — user gets a retry
                     val errorMsg = Message(
                         id = "ai_err_${System.currentTimeMillis()}",
                         senderId = "ai_companion",
-                        text = "I'm having a little trouble connecting. Please try again in a moment.",
+                        text = "I'm having a brief connection issue, but please know you're not alone. Feel free to try again or reach out to our human listeners.",
                         timestamp = System.currentTimeMillis()
                     )
                     _messages.value = _messages.value + errorMsg
