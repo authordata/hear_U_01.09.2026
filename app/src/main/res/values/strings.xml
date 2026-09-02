@@ -1,16 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">HearU</string>
+    <string name="tagline">You are never alone. A safe space to be heard.</string>
     <string name="welcome_title">Welcome to HearU</string>
-    <string name="login_btn">Login</string>
-    <string name="email_label">Email</string>
+    <string name="login_btn">Sign In</string>
+    <string name="register_btn">Create Account</string>
+    <string name="email_label">Email Address</string>
     <string name="password_label">Password</string>
     <string name="seeker_title">I need support</string>
+    <string name="seeker_desc">Connect with an empathetic listener or chat with AI companion</string>
     <string name="giver_title">I want to listen</string>
+    <string name="giver_desc">Provide a compassionate, non-judgmental ear for someone in need</string>
     <string name="ai_companion_title">AI Companion</string>
-    <string name="find_listener_btn">Find a Listener</string>
+    <string name="ai_companion_subtitle">Powered by Gemini 3.7 Flash</string>
+    <string name="find_listener_btn">Find a Compassionate Listener</string>
     <string name="chat_ai_btn">Chat with AI Companion</string>
-    <string name="sos_crisis_btn">SOS</string>
+    <string name="breathing_exercise_btn">4-7-8 Breathing &amp; Grounding</string>
+    <string name="sos_crisis_btn">SOS 24/7</string>
     <string name="report_user">Report User</string>
     <string name="block_user">Block &amp; Leave</string>
+    <string name="back">Back</string>
+    <string name="anonymity_guarantee">100% Confidential &amp; Encrypted. Photos stay blurred until mutual consent.</string>
+    <string name="privacy_policy">Privacy Policy &amp; 30-Day Auto Purge</string>
 </resources>

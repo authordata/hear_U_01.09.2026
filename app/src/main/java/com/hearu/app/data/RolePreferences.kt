@@ -3,6 +3,7 @@ package com.hearu.app.data
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -23,6 +24,9 @@ class RolePreferences @Inject constructor(@ApplicationContext private val contex
 
     private object Keys {
         val ACTIVE_ROLE = stringPreferencesKey("active_role")
+        val DISPLAY_NAME = stringPreferencesKey("display_name")
+        val BIOMETRIC_ENABLED = booleanPreferencesKey("biometric_enabled")
+        val DARK_THEME = booleanPreferencesKey("dark_theme")
         val AI_MSG_COUNT = intPreferencesKey("ai_msg_count")
         val AI_MSG_DATE = longPreferencesKey("ai_msg_date")
     }
@@ -31,9 +35,39 @@ class RolePreferences @Inject constructor(@ApplicationContext private val contex
         prefs[Keys.ACTIVE_ROLE]
     }
 
+    val displayNameFlow: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[Keys.DISPLAY_NAME] ?: "KindSoul"
+    }
+
+    val isBiometricEnabledFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.BIOMETRIC_ENABLED] ?: false
+    }
+
+    val isDarkThemeFlow: Flow<Boolean?> = context.dataStore.data.map { prefs ->
+        prefs[Keys.DARK_THEME]
+    }
+
     suspend fun setActiveRole(role: String) {
         context.dataStore.edit { prefs ->
             prefs[Keys.ACTIVE_ROLE] = role
+        }
+    }
+
+    suspend fun setDisplayName(name: String) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.DISPLAY_NAME] = name
+        }
+    }
+
+    suspend fun setBiometricEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.BIOMETRIC_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setDarkTheme(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.DARK_THEME] = enabled
         }
     }
 
