@@ -1,8 +1,27 @@
 # HearU 🤝
 
-> **"You are not alone."**
+> **"You are never alone. A safe space to be heard."**
 
-HearU is a privacy-first emotional support Android application that connects people who need to be heard (Seekers) with empathetic listeners (Givers), with an AI Companion fallback powered by **Gemini 3.7 Flash** via Firebase AI Logic.
+HearU is a privacy-first emotional support Android application that connects people who need to be heard (**Seekers**) with empathetic listeners (**Givers**), accompanied by an AI Companion powered by **Gemini 3.7 Flash** via Firebase AI Logic and an interactive **4-7-8 Breathing & 5-4-3-2-1 Sensory Grounding Guide** for acute anxiety relief.
+
+---
+
+## 📸 Key Features & Capabilities
+
+| Seeker Dashboard | Gemini 3.7 Flash AI Companion | 4-7-8 Breathing & Grounding | 24/7 Crisis SOS Hub |
+|:---:|:---:|:---:|:---:|
+| 🎯 Smart topic matching & radar scan | 🤖 Multi-turn empathetic conversation & quota | 🌬️ Animated pulsating orb & sensory guide | 🚨 1-tap dial 988 Lifeline & SMS text |
+
+### 🌟 Core Experience
+- **👥 Peer-to-Peer Empathetic Matching:** Real-time matching between Seekers and active online Givers based on emotional tag overlap ("Anxiety", "Loneliness", "Work Stress", "Relationship", "Grief", "Sleep").
+- **🤖 24/7 AI Companion (Gemini 3.7 Flash):** Multi-turn conversational companion with safety filter guardrails (`HarmBlockThreshold`), input bounding, and a daily 50-message quota persisted across device reboots via `DataStore`.
+- **🌬️ Calming & Grounding Tools:** Interactive 4-7-8 Breathing pacer with animated expanding circle + 5-4-3-2-1 Sensory Grounding tool for panic attacks.
+- **🛡️ 24/7 Crisis Escalation & SOS:** Prominent emergency action routing to the **988 Suicide & Crisis Lifeline**, Crisis Text Line (741741), Trevor Project, and Veterans Crisis Line.
+- **🔒 Privacy & Anonymity First:**
+  - Strict **18+ platform policy**.
+  - Profile pictures remain **cryptographically blurred** until mutual in-session consent.
+  - **30-day ephemeral auto-purge:** All chat sessions and transcripts are permanently deleted after 30 days via scheduled Cloud Function.
+  - **Biometric App Lock:** Optional Face ID / Fingerprint unlock via AndroidX `BiometricPrompt`.
 
 ---
 
@@ -10,26 +29,29 @@ HearU is a privacy-first emotional support Android application that connects peo
 
 ```
 app/
-├── ai/                     # GeminiAiService (Firebase AI Logic)
+├── ai/                     # GeminiAiService (Firebase AI Logic with safety thresholds)
+├── auth/                   # BiometricHelper (AndroidX BiometricPrompt)
 ├── data/
 │   ├── local/
-│   │   ├── dao/            # Room DAO (MessageDao)
+│   │   ├── dao/            # Room DAO (MessageDao with indexed queries)
 │   │   └── entity/         # Room Entities (MessageEntity)
-│   └── RolePreferences.kt  # DataStore — role + AI quota (persistent)
-├── di/                     # Hilt DI Modules
+│   └── RolePreferences.kt  # DataStore — role, quota, biometric & theme preferences
+├── di/                     # Hilt DI Modules (AppModule, DatabaseModule)
 ├── model/                  # Domain models: User, Message, ChatSession
-├── navigation/             # Type-safe NavHost with sealed Screen class
-├── repository/             # ChatRepository, AuthRepository, UserRepository
+├── navigation/             # Type-safe Navigation Compose with sealed Screen class
+├── repository/             # ChatRepository (SSOT), AuthRepository, UserRepository, ModerationRepository
 ├── ui/
-│   ├── auth/               # LoginScreen, AuthViewModel
+│   ├── auth/               # LoginScreen, RoleSelectionScreen, AuthViewModel
 │   ├── chat/               # ChatScreen, AIChatScreen, ViewModels
 │   ├── dialogs/            # CrisisSupportDialog, ReportUserDialog
-│   ├── home/               # SeekerDashboard, GiverDashboard, ProfileScreen
-│   └── theme/              # HearUTheme (Material 3, Color, Type)
-└── HearUApplication.kt     # Hilt entry point
+│   ├── emergency/          # EmergencyScreen (24/7 Crisis Directory & Hotlines)
+│   ├── home/               # SeekerDashboard, GiverDashboard, ProfileScreen, MatchViewModel
+│   ├── theme/              # HearUTheme (Material 3 DayNight, Color, Type)
+│   └── tools/              # BreathingExerciseScreen (4-7-8 Breathing & Grounding Guide)
+└── HearUApplication.kt     # Application class annotated with @HiltAndroidApp
 ```
 
-**Pattern:** MVVM + Repository + Single Source of Truth (Room ↔ Firestore)
+**Pattern:** Clean Architecture + MVVM + Single Source of Truth (Room ↔ Cloud Firestore)
 
 ---
 
@@ -38,143 +60,49 @@ app/
 | Layer | Technology |
 |---|---|
 | Language | Kotlin 2.0 |
-| UI | Jetpack Compose + Material 3 |
-| Navigation | Navigation Compose (type-safe sealed routes) |
-| DI | Hilt 2.52 |
-| Local DB | Room 2.6.1 |
-| Preferences | DataStore Preferences 1.1.1 |
-| Auth | Firebase Authentication |
-| Remote DB | Cloud Firestore |
-| AI | Firebase AI Logic (Gemini 3.7 Flash) |
-| Backend | Firebase Cloud Functions (Node.js) |
-| Biometrics | AndroidX Biometric |
-| Testing | JUnit4, Mockito, Turbine, Coroutines Test |
-| Build | AGP 8.5, KSP 2.0, ProGuard/R8 |
+| UI Framework | Jetpack Compose + Material 3 (BOM 2024.06.00) |
+| Dependency Injection | Dagger Hilt 2.52 |
+| Local Database | Room 2.6.1 (SQLite with indices & SSOT pattern) |
+| Key-Value Storage | Jetpack DataStore Preferences 1.1.1 (Atomic transactions) |
+| Authentication | Firebase Authentication (Email/Password & Anonymous) |
+| Remote Database | Cloud Firestore (with fine-grained security rules) |
+| AI Integration | Firebase AI Logic SDK (Gemini 3.7 Flash) |
+| Cloud Functions | Node.js Serverless Functions (Matching, 30-Day Batch Purge, Moderation) |
+| Security & Biometrics | AndroidX Biometric 1.2.0-alpha05 |
+| Build System | Android Gradle Plugin 8.5.0, KSP 2.0.0, ProGuard/R8 |
 
 ---
 
-## ✨ Features
+## 🚀 Running in Android Studio
 
-### 👥 Human-to-Human Connection
-- **Dual Roles:** Users can be a **Seeker** (seeking support) or a **Giver** (offering support)
-- **Smart Matching:** Server-side Cloud Function matches Seekers to available online Givers using emotional tag overlap + rating scoring
-- **Anonymous by Default:** Real names and emails are never exposed; profile photos are blurred until mutual consent
+1. **Open in Android Studio:**
+   - Launch Android Studio (Ladybug or newer).
+   - Select **File > Open** and choose the `/Users/manirajc/hear_U_01.09.2026` folder.
+   - Android Studio will automatically sync the project via the bundled Gradle 8.7 wrapper.
 
-### 🤖 AI Companion (Gemini 3.7 Flash)
-- Empathetic, warm AI that listens without judgment
-- **Crisis Detection:** Pre-checks user input with keyword heuristics; Gemini also signals `[CRISIS_ALERT]` in responses
-- **Persistent Daily Quota:** 50 messages/day enforced via DataStore across sessions and reboots
-- Graceful error messages when AI is unavailable
+2. **Add Firebase Configuration (Optional for Cloud Sync):**
+   - Place your `google-services.json` at `app/google-services.json`.
+   - The app includes graceful local fallback simulation so all UI, Matchmaking, and AI features run smoothly even in offline demo mode.
 
-### 🛡️ Safety & Crisis Protocols
-- **Crisis Dialog:** Triggered automatically on distress signals — offers one-tap dialing of the **988 Suicide & Crisis Lifeline** and direct link to Lifeline online chat
-- **Report & Block:** In-chat moderation with server-side alert logging
-- **Firestore Security Rules:** RBAC — only session participants can read/write messages; 2,000-character limit enforced at DB level
-
-### 🔒 Security
-- Firebase Auth UID used for all IDOR-safe server-side operations
-- No hardcoded credentials or demo backdoors in any build
-- ProGuard/R8 minification enabled for release builds
-- Biometric lock supported (on-device only, never transmitted)
-
-### 🌐 Backend (Firebase Cloud Functions)
-| Function | Trigger | Purpose |
-|---|---|---|
-| `matchSeekerWithGiver` | HTTPS Callable | Authenticated matching algorithm |
-| `purgeExpiredChats` | Daily Cron (Pub/Sub) | 30-day auto-deletion of expired sessions |
-| `onReportSubmitted` | Firestore onCreate | Moderation alert logging |
-
-### 📴 Offline Support
-- All Firestore messages are cached to Room DB on receipt
-- Optimistic UI: sent messages appear instantly before cloud sync
+3. **Run the App:**
+   - Select the `app` configuration and press **Run (Shift + F10)** on your emulator or physical device.
 
 ---
 
-## 🚀 Getting Started
-
-### Prerequisites
-- Android Studio Ladybug (or newer)
-- JDK 17
-- Firebase project with Authentication, Firestore, and AI Logic enabled
-
-### Setup
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/authordata/hear_U_01.09.2026.git
-   cd hear_U_01.09.2026
-   ```
-
-2. **Add Firebase config:**
-   - Download `google-services.json` from your Firebase project console
-   - Place it at `app/google-services.json`
-
-3. **Deploy Firestore Security Rules:**
-   ```bash
-   firebase deploy --only firestore:rules
-   ```
-
-4. **Deploy Cloud Functions:**
-   ```bash
-   cd functions && npm install && firebase deploy --only functions
-   ```
-
-5. **Build & Run:**
-   ```bash
-   ./gradlew assembleDebug
-   # or open in Android Studio and click Run
-   ```
-
----
-
-## 🧪 Testing
+## 🧪 Testing Suite
 
 ```bash
-# Unit tests
+# Run unit tests
 ./gradlew test
 
-# Instrumented UI tests
+# Run UI / Compose instrumented tests
 ./gradlew connectedAndroidTest
 ```
 
-Test coverage includes:
-- `AuthViewModelTest` — auth state machine & error propagation
-- `AIChatViewModelTest` — crisis detection, quota enforcement, welcome message
-- `LoginScreenTest` — Compose UI login flow
-
 ---
 
-## 🔐 Privacy & Safety
+## 📄 License & Safety Notice
 
-See [PRIVACY_POLICY.md](./PRIVACY_POLICY.md) for the full policy. Key points:
-- **18+ only** platform
-- Chat logs purged after **30 days** automatically
-- Biometric data stays **on-device only**
-- No real names or emails are ever made public
-
----
-
-## 📦 Deployment Checklist (Play Store)
-
-- [x] ProGuard/R8 minification + resource shrinking enabled for release
-- [x] `google-services.json` configured
-- [x] `versionCode = 1`, `versionName = "1.0.0"` set
-- [x] Adaptive launcher icons (all densities: mdpi → xxxhdpi)
-- [x] Firestore security rules deployed
-- [x] Cloud Functions deployed
-- [x] No demo/hardcoded credentials in any build variant
-- [x] Privacy Policy published and linked in Play Store listing
-- [ ] **TODO:** Sign with production keystore (do NOT use debug keystore)
-- [ ] **TODO:** `./gradlew :app:bundleRelease` to generate AAB
-- [ ] **TODO:** Age rating questionnaire in Play Console (recommend 18+)
-- [ ] **TODO:** Ensure `google-services.json` is in `.gitignore`
-
----
-
-## 📄 License
+HearU is a supportive peer listening platform and is not a substitute for clinical psychotherapy or medical treatment. In emergencies, please dial **988** or your local emergency services (911/112).
 
 © 2026 HearU. All rights reserved.
-
----
-
-*Built with ❤️ to make emotional support more accessible.*
