@@ -1,5 +1,7 @@
 package com.hearu.app
 
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
 import com.hearu.app.ai.AiResult
 import com.hearu.app.ai.GeminiAiService
 import com.hearu.app.data.RolePreferences
@@ -25,6 +27,8 @@ class AIChatViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
     private val geminiService: GeminiAiService = mock()
     private val preferences: RolePreferences = mock()
+    private val auth: FirebaseAuth = mock()
+    private val mockUser: FirebaseUser = mock()
     private lateinit var viewModel: AIChatViewModel
 
     @Before
@@ -32,9 +36,11 @@ class AIChatViewModelTest {
         Dispatchers.setMain(testDispatcher)
         runTest(testDispatcher) {
             whenever(preferences.getAiMessagesUsedToday()).thenReturn(0)
-            whenever(preferences.incrementAiMessageCount()).thenReturn(1)
+            whenever(preferences.tryConsumeAiQuota(any())).thenReturn(true)
+            whenever(auth.currentUser).thenReturn(mockUser)
+            whenever(mockUser.uid).thenReturn("test_uid_123")
         }
-        viewModel = AIChatViewModel(geminiService, preferences)
+        viewModel = AIChatViewModel(geminiService, preferences, auth)
     }
 
     @After

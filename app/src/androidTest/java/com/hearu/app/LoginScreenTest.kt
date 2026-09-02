@@ -1,1 +1,39 @@
-cGFja2FnZSBjb20uaGVhcnUuYXBwCgppbXBvcnQgYW5kcm9pZHguY29tcG9zZS51aS50ZXN0LmFzc2VydElzRGlzcGxheWVkCmltcG9ydCBhbmRyb2lkeC5jb21wb3NlLnVpLnRlc3QuanVuaXQ0LmNyZWF0ZUNvbXBvc2VSdWxlCmltcG9ydCBhbmRyb2lkeC5jb21wb3NlLnVpLnRlc3Qub25Ob2RlV2l0aFRleHQKaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UudWkudGVzdC5wZXJmb3JtQ2xpY2sKaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UudWkudGVzdC5wZXJmb3JtVGV4dElucHV0CmltcG9ydCBhbmRyb2lkeC50ZXN0LmV4dC5qdW5pdC5ydW5uZXJzLkFuZHJvaWRKVW5pdDQKaW1wb3J0IGNvbS5oZWFydS5hcHAudWkuYXV0aC5Mb2dpblNjcmVlbgppbXBvcnQgY29tLmhlYXJ1LmFwcC51aS50aGVtZS5IZWFyVVRoZW1lCmltcG9ydCBvcmcuanVuaXQuQXNzZXJ0LmFzc2VydFRydWUKaW1wb3J0IG9yZy5qdW5pdC5SdWxlCmltcG9ydCBvcmcuanVuaXQuVGVzdAppbXBvcnQgb3JnLmp1bml0LnJ1bm5lci5SdW5XaXRoCgpAUnVuV2l0aChBbmRyb2lkSlVuaXQ0OjpjbGFzcykKY2xhc3MgTG9naW5TY3JlZW5UZXN0IHsKCiAgICBAZ2V0OlJ1bGUKICAgIHZhbCBjb21wb3NlVGVzdFJ1bGUgPSBjcmVhdGVDb21wb3NlUnVsZSgpCgogICAgQFRlc3QKICAgIGZ1biBsb2dpblNjcmVlbl9yZW5kZXJzSW5wdXRzX2FuZF9zdWJtaXRzKCkgewogICAgICAgIHZhciBsb2dpblRyaWdnZXJlZCA9IGZhbHNlCgogICAgICAgIGNvbXBvc2VUZXN0UnVsZS5zZXRDb250ZW50IHsKICAgICAgICAgICAgSGVhclVUaGVtZSB7CiAgICAgICAgICAgICAgICBMb2dpblNjcmVlbihvbkxvZ2luU3VibWl0ID0geyBfLCBfIC0+IGxvZ2luVHJpZ2dlcmVkID0gdHJ1ZSB9KQogICAgICAgICAgICB9CiAgICAgICAgfQoKICAgICAgICBjb21wb3NlVGVzdFJ1bGUub25Ob2RlV2l0aFRleHQoIldlbGNvbWUgdG8gSGVhclUiKS5hc3NlcnRJc0Rpc3BsYXllZCgpCiAgICAgICAgY29tcG9zZVRlc3RSdWxlLm9uTm9kZVdpdGhUZXh0KCJFbWFpbCIpLnBlcmZvcm1UZXh0SW5wdXQoInRlc3RAaGVhcnUuYXBwIikKICAgICAgICBjb21wb3NlVGVzdFJ1bGUub25Ob2RlV2l0aFRleHQoIlBhc3N3b3JkIikucGVyZm9ybVRleHRJbnB1dCgiVmFsaWRQYXNzMTIzISIpCgogICAgICAgIGNvbXBvc2VUZXN0UnVsZS5vbk5vZGVXaXRoVGV4dCgiTG9naW4iKS5wZXJmb3JtQ2xpY2soKQogICAgICAgIGFzc2VydFRydWUobG9naW5UcmlnZ2VyZWQpCiAgICB9Cn0K
+package com.hearu.app
+
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.hearu.app.ui.auth.LoginScreen
+import com.hearu.app.ui.theme.HearUTheme
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+
+@RunWith(AndroidJUnit4::class)
+class LoginScreenTest {
+
+    @get:Rule
+    val composeTestRule = createComposeRule()
+
+    @Test
+    fun loginScreen_rendersInputs_and_submits() {
+        var loginTriggered = false
+
+        composeTestRule.setContent {
+            HearUTheme {
+                LoginScreen(onLoginSubmit = { _, _ -> loginTriggered = true })
+            }
+        }
+
+        composeTestRule.onNodeWithText("Welcome to HearU").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Email").performTextInput("test@hearu.app")
+        composeTestRule.onNodeWithText("Password").performTextInput("ValidPass123!")
+
+        composeTestRule.onNodeWithText("Login").performClick()
+        assertTrue(loginTriggered)
+    }
+}

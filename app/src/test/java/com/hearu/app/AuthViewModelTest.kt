@@ -1,6 +1,7 @@
 package com.hearu.app
 
 import app.cash.turbine.test
+import com.google.firebase.auth.FirebaseUser
 import com.hearu.app.data.RolePreferences
 import com.hearu.app.repository.AuthRepository
 import com.hearu.app.ui.auth.AuthState
@@ -16,6 +17,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
+import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 
@@ -25,6 +27,7 @@ class AuthViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
     private val authRepository: AuthRepository = mock()
     private val rolePreferences: RolePreferences = mock()
+    private val mockUser: FirebaseUser = mock()
     private lateinit var viewModel: AuthViewModel
 
     @Before
@@ -46,7 +49,11 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun `login transitions through Loading to Authenticated`() = runTest(testDispatcher) {
+    fun `login transitions through Loading to Authenticated on valid credentials`() = runTest(testDispatcher) {
+        runTest(testDispatcher) {
+            whenever(authRepository.signInWithEmail(any(), any())).thenReturn(Result.success(mockUser))
+        }
+
         viewModel.authState.test {
             assertEquals(AuthState.Idle, awaitItem())
             viewModel.login("test@hearu.app", "Password123!")
