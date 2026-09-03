@@ -17,5 +17,7 @@ data class MessageEntity(
     val senderId: String,
     val text: String,
     val timestamp: Long,
-    val isSystemMessage: Boolean = false
+    val isSystemMessage: Boolean = false,
+    val isVoiceNote: Boolean = false,
+    val voiceDurationSeconds: Int = 0
 )

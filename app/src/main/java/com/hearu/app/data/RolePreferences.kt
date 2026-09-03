@@ -25,6 +25,7 @@ class RolePreferences @Inject constructor(@ApplicationContext private val contex
     private object Keys {
         val ACTIVE_ROLE = stringPreferencesKey("active_role")
         val DISPLAY_NAME = stringPreferencesKey("display_name")
+        val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         val BIOMETRIC_ENABLED = booleanPreferencesKey("biometric_enabled")
         val DARK_THEME = booleanPreferencesKey("dark_theme")
         val AI_MSG_COUNT = intPreferencesKey("ai_msg_count")
@@ -37,6 +38,10 @@ class RolePreferences @Inject constructor(@ApplicationContext private val contex
 
     val displayNameFlow: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[Keys.DISPLAY_NAME] ?: "KindSoul"
+    }
+
+    val onboardingCompletedFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.ONBOARDING_COMPLETED] ?: false
     }
 
     val isBiometricEnabledFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
@@ -56,6 +61,12 @@ class RolePreferences @Inject constructor(@ApplicationContext private val contex
     suspend fun setDisplayName(name: String) {
         context.dataStore.edit { prefs ->
             prefs[Keys.DISPLAY_NAME] = name
+        }
+    }
+
+    suspend fun setOnboardingCompleted(completed: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.ONBOARDING_COMPLETED] = completed
         }
     }
 

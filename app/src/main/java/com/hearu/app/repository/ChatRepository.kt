@@ -20,7 +20,6 @@ class ChatRepository @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val messageDao: MessageDao
 ) {
-    // Repository-scoped supervisor scope — not tied to any single Flow or ViewModel
     private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /**
@@ -28,9 +27,7 @@ class ChatRepository @Inject constructor(
      * Firestore listener syncs to Room in background — UI always reads from local DB.
      */
     fun getMessages(sessionId: String): Flow<List<Message>> {
-        // Start Firestore sync in background
         startFirestoreSync(sessionId)
-        // Return Room as SSOT — offline-capable
         return messageDao.getMessagesForSession(sessionId).map { entities ->
             entities.map { it.toDomain() }
         }
@@ -52,7 +49,9 @@ class ChatRepository @Inject constructor(
                             senderId = msg.senderId,
                             text = msg.text,
                             timestamp = msg.timestamp,
-                            isSystemMessage = msg.isSystemMessage
+                            isSystemMessage = msg.isSystemMessage,
+                            isVoiceNote = msg.isVoiceNote,
+                            voiceDurationSeconds = msg.voiceDurationSeconds
                         )
                     }
                     repositoryScope.launch {
@@ -69,7 +68,7 @@ class ChatRepository @Inject constructor(
             .document()
         val messageWithId = message.copy(id = docRef.id)
 
-        // Optimistic local insert (Room = SSOT, so UI will see it immediately)
+        // Optimistic local insert (Room = SSOT)
         messageDao.insertMessage(
             MessageEntity(
                 id = messageWithId.id,
@@ -77,7 +76,9 @@ class ChatRepository @Inject constructor(
                 senderId = messageWithId.senderId,
                 text = messageWithId.text,
                 timestamp = messageWithId.timestamp,
-                isSystemMessage = messageWithId.isSystemMessage
+                isSystemMessage = messageWithId.isSystemMessage,
+                isVoiceNote = messageWithId.isVoiceNote,
+                voiceDurationSeconds = messageWithId.voiceDurationSeconds
             )
         )
         // Remote sync
@@ -99,5 +100,7 @@ private fun MessageEntity.toDomain(): Message = Message(
     senderId = senderId,
     text = text,
     timestamp = timestamp,
-    isSystemMessage = isSystemMessage
+    isSystemMessage = isSystemMessage,
+    isVoiceNote = isVoiceNote,
+    voiceDurationSeconds = voiceDurationSeconds
 )

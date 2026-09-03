@@ -2,18 +2,21 @@
 
 > **"You are never alone. A safe space to be heard."**
 
-HearU is a privacy-first emotional support Android application that connects people who need to be heard (**Seekers**) with empathetic listeners (**Givers**), accompanied by an AI Companion powered by **Gemini 3.7 Flash** via Firebase AI Logic and an interactive **4-7-8 Breathing & 5-4-3-2-1 Sensory Grounding Guide** for acute anxiety relief.
+HearU is a privacy-first emotional support Android application that connects people who need to be heard (**Seekers**) with empathetic listeners (**Givers**), accompanied by an AI Companion powered by **Gemini 3.7 Flash** via Firebase AI Logic, real-time **Audio Voice Notes with Waveforms**, **FCM Push Notifications**, and an interactive **4-7-8 Breathing & 5-4-3-2-1 Sensory Grounding Guide** for acute anxiety relief.
 
 ---
 
 ## 📸 Key Features & Capabilities
 
-| Seeker Dashboard | Gemini 3.7 Flash AI Companion | 4-7-8 Breathing & Grounding | 24/7 Crisis SOS Hub |
-|:---:|:---:|:---:|:---:|
-| 🎯 Smart topic matching & radar scan | 🤖 Multi-turn empathetic conversation & quota | 🌬️ Animated pulsating orb & sensory guide | 🚨 1-tap dial 988 Lifeline & SMS text |
+| Seeker Dashboard | Gemini 3.7 Flash AI Companion | Audio Voice Notes | 4-7-8 Breathing & Grounding | 24/7 Crisis SOS Hub |
+|:---:|:---:|:---:|:---:|:---:|
+| 🎯 Smart topic matching & radar scan | 🤖 Multi-turn empathetic conversation & quota | 🎤 Real-time recording & animated waveform | 🌬️ Animated pulsating orb & sensory guide | 🚨 1-tap dial 988 Lifeline & SMS text |
 
 ### 🌟 Core Experience
 - **👥 Peer-to-Peer Empathetic Matching:** Real-time matching between Seekers and active online Givers based on emotional tag overlap ("Anxiety", "Loneliness", "Work Stress", "Relationship", "Grief", "Sleep").
+- **🎤 Audio Voice Notes & Waveform Visualizer:** Record and play voice notes in peer chat with dynamic waveform animations, duration scrubber, and hardware/synthetic fallback.
+- **🔔 FCM Push Notifications (`HearUFirebaseMessagingService`):** Notification channels for *Peer Match Requests*, *Chat Messages*, and *Emergency Crisis Alerts* with direct-to-chat deep linking.
+- **✨ 3-Step Interactive Onboarding:** High-fidelity walkthrough introducing anonymity, 24/7 AI companion protocols, and 30-day ephemeral auto-delete.
 - **🤖 24/7 AI Companion (Gemini 3.7 Flash):** Multi-turn conversational companion with safety filter guardrails (`HarmBlockThreshold`), input bounding, and a daily 50-message quota persisted across device reboots via `DataStore`.
 - **🌬️ Calming & Grounding Tools:** Interactive 4-7-8 Breathing pacer with animated expanding circle + 5-4-3-2-1 Sensory Grounding tool for panic attacks.
 - **🛡️ 24/7 Crisis Escalation & SOS:** Prominent emergency action routing to the **988 Suicide & Crisis Lifeline**, Crisis Text Line (741741), Trevor Project, and Veterans Crisis Line.
@@ -30,6 +33,7 @@ HearU is a privacy-first emotional support Android application that connects peo
 ```
 app/
 ├── ai/                     # GeminiAiService (Firebase AI Logic with safety thresholds)
+├── audio/                  # VoiceNoteManager (Hardware MediaRecorder + Waveform Visualizer)
 ├── auth/                   # BiometricHelper (AndroidX BiometricPrompt)
 ├── data/
 │   ├── local/
@@ -40,12 +44,14 @@ app/
 ├── model/                  # Domain models: User, Message, ChatSession
 ├── navigation/             # Type-safe Navigation Compose with sealed Screen class
 ├── repository/             # ChatRepository (SSOT), AuthRepository, UserRepository, ModerationRepository
+├── service/                # HearUFirebaseMessagingService (FCM push notification handling & channels)
 ├── ui/
 │   ├── auth/               # LoginScreen, RoleSelectionScreen, AuthViewModel
-│   ├── chat/               # ChatScreen, AIChatScreen, ViewModels
+│   ├── chat/               # ChatScreen, AIChatScreen, ViewModels, VoiceNotePlayer
 │   ├── dialogs/            # CrisisSupportDialog, ReportUserDialog
 │   ├── emergency/          # EmergencyScreen (24/7 Crisis Directory & Hotlines)
 │   ├── home/               # SeekerDashboard, GiverDashboard, ProfileScreen, MatchViewModel
+│   ├── onboarding/         # OnboardingScreen (Interactive 3-Step Walkthrough)
 │   ├── theme/              # HearUTheme (Material 3 DayNight, Color, Type)
 │   └── tools/              # BreathingExerciseScreen (4-7-8 Breathing & Grounding Guide)
 └── HearUApplication.kt     # Application class annotated with @HiltAndroidApp
@@ -66,6 +72,7 @@ app/
 | Key-Value Storage | Jetpack DataStore Preferences 1.1.1 (Atomic transactions) |
 | Authentication | Firebase Authentication (Email/Password & Anonymous) |
 | Remote Database | Cloud Firestore (with fine-grained security rules) |
+| Push Notifications | Firebase Cloud Messaging (FCM) |
 | AI Integration | Firebase AI Logic SDK (Gemini 3.7 Flash) |
 | Cloud Functions | Node.js Serverless Functions (Matching, 30-Day Batch Purge, Moderation) |
 | Security & Biometrics | AndroidX Biometric 1.2.0-alpha05 |
@@ -82,7 +89,7 @@ app/
 
 2. **Add Firebase Configuration (Optional for Cloud Sync):**
    - Place your `google-services.json` at `app/google-services.json`.
-   - The app includes graceful local fallback simulation so all UI, Matchmaking, and AI features run smoothly even in offline demo mode.
+   - The app includes graceful local fallback simulation so all UI, Matchmaking, Voice Notes, and AI features run smoothly even in offline demo mode.
 
 3. **Run the App:**
    - Select the `app` configuration and press **Run (Shift + F10)** on your emulator or physical device.
@@ -98,11 +105,3 @@ app/
 # Run UI / Compose instrumented tests
 ./gradlew connectedAndroidTest
 ```
-
----
-
-## 📄 License & Safety Notice
-
-HearU is a supportive peer listening platform and is not a substitute for clinical psychotherapy or medical treatment. In emergencies, please dial **988** or your local emergency services (911/112).
-
-© 2026 HearU. All rights reserved.
