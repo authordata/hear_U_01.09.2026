@@ -12,7 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Emergency
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Send
@@ -36,8 +36,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hearu.app.model.Message
+import com.hearu.app.ui.chat.components.VoiceNoteBubble
+import com.hearu.app.ui.chat.components.VoiceRecordBar
 import com.hearu.app.ui.dialogs.CrisisSupportDialog
 import com.hearu.app.ui.dialogs.ReportUserDialog
+import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -62,6 +65,20 @@ fun ChatScreen(
     var showPhotoRevealDialog by rememberSaveable { mutableStateOf(false) }
     var isPhotoUnblurred by rememberSaveable { mutableStateOf(false) }
     var showEndSessionSheet by rememberSaveable { mutableStateOf(false) }
+
+    // Voice recording state
+    var isRecording by remember { mutableStateOf(false) }
+    var recordingDuration by remember { mutableStateOf(0) }
+
+    LaunchedEffect(isRecording) {
+        if (isRecording) {
+            recordingDuration = 0
+            while (isRecording) {
+                delay(1000L)
+                recordingDuration++
+            }
+        }
+    }
 
     LaunchedEffect(sessionId) {
         viewModel.joinSession(sessionId, userId)
@@ -146,7 +163,6 @@ fun ChatScreen(
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        // Blurred / Unblurred avatar
                         Box(
                             modifier = Modifier
                                 .size(36.dp)
@@ -225,39 +241,67 @@ fun ChatScreen(
         bottomBar = {
             Column(modifier = Modifier.padding(8.dp).fillMaxWidth()) {
                 // Quick Empathy Reaction Row
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    val reactions = listOf("❤️", "🫂", "🙏", "🌸", "✨")
-                    reactions.forEach { emoji ->
-                        AssistChip(
-                            onClick = { viewModel.sendMessage(emoji) },
-                            label = { Text(emoji) }
-                        )
+                if (!isRecording) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val reactions = listOf("❤️", "🫂", "🙏", "🌸", "✨")
+                        reactions.forEach { emoji ->
+                            AssistChip(
+                                onClick = { viewModel.sendMessage(emoji) },
+                                label = { Text(emoji) }
+                            )
+                        }
                     }
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = inputText,
-                        onValueChange = { inputText = it },
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text("Share with compassion...") },
-                        maxLines = 4
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    IconButton(
-                        onClick = {
-                            if (inputText.isNotBlank()) {
-                                viewModel.sendMessage(inputText)
-                                inputText = ""
+                // Voice Recording Live Bar
+                if (isRecording) {
+                    VoiceRecordBar(
+                        isRecording = isRecording,
+                        recordingDurationSec = recordingDuration,
+                        onStartRecording = { isRecording = true },
+                        onStopRecording = {
+                            val duration = recordingDuration
+                            isRecording = false
+                            if (duration > 0) {
+                                viewModel.stopAndSendVoiceRecording()
                             }
                         },
-                        enabled = !isSending && inputText.isNotBlank(),
-                        colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.primary)
-                    ) {
-                        Icon(Icons.Default.Send, contentDescription = "Send", tint = MaterialTheme.colorScheme.onPrimary)
+                        onCancelRecording = { isRecording = false }
+                    )
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = inputText,
+                            onValueChange = { inputText = it },
+                            modifier = Modifier.weight(1f),
+                            placeholder = { Text("Share with compassion...") },
+                            maxLines = 4
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        if (inputText.isBlank()) {
+                            IconButton(
+                                onClick = { isRecording = true },
+                                colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                            ) {
+                                Icon(Icons.Default.Mic, contentDescription = "Record Voice Note", tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                            }
+                        } else {
+                            IconButton(
+                                onClick = {
+                                    if (inputText.isNotBlank()) {
+                                        viewModel.sendMessage(inputText)
+                                        inputText = ""
+                                    }
+                                },
+                                enabled = !isSending,
+                                colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.primary)
+                            ) {
+                                Icon(Icons.Default.Send, contentDescription = "Send", tint = MaterialTheme.colorScheme.onPrimary)
+                            }
+                        }
                     }
                 }
             }
@@ -273,7 +317,7 @@ fun ChatScreen(
                     Spacer(modifier = Modifier.height(12.dp))
                     Text("Your Safe Space is Connected", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text(
-                        "Say hello. Take your time, there is no rush.",
+                        "Say hello or record a short voice note. Take your time, there is no rush.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
@@ -309,17 +353,24 @@ private fun MessageBubble(message: Message, isMine: Boolean) {
         Column(
             horizontalAlignment = if (isMine) Alignment.End else Alignment.Start
         ) {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = if (isMine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                tonalElevation = 1.dp
-            ) {
-                Text(
-                    text = message.text,
-                    modifier = Modifier.padding(12.dp),
-                    color = if (isMine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyLarge
+            if (message.isVoiceNote) {
+                VoiceNoteBubble(
+                    durationSeconds = message.voiceDurationSeconds.coerceAtLeast(1),
+                    isMine = isMine
                 )
+            } else {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (isMine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                    tonalElevation = 1.dp
+                ) {
+                    Text(
+                        text = message.text,
+                        modifier = Modifier.padding(12.dp),
+                        color = if (isMine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
             }
             Text(
                 text = formattedTime,

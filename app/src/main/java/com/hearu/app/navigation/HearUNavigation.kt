@@ -3,6 +3,7 @@ package com.hearu.app.navigation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
@@ -20,9 +21,12 @@ import com.hearu.app.ui.emergency.EmergencyScreen
 import com.hearu.app.ui.home.GiverDashboard
 import com.hearu.app.ui.home.ProfileScreen
 import com.hearu.app.ui.home.SeekerDashboard
+import com.hearu.app.ui.onboarding.OnboardingScreen
 import com.hearu.app.ui.tools.BreathingExerciseScreen
+import kotlinx.coroutines.launch
 
 sealed class Screen(val route: String) {
+    data object Onboarding : Screen("onboarding")
     data object Login : Screen("login")
     data object RoleSelection : Screen("role_selection")
     data object SeekerHome : Screen("seeker_home")
@@ -41,18 +45,28 @@ fun HearUNavigation(
     authViewModel: AuthViewModel = hiltViewModel()
 ) {
     val navController = rememberNavController()
+    val coroutineScope = rememberCoroutineScope()
     val authState by authViewModel.authState.collectAsStateWithLifecycle()
     val activeRole by authViewModel.activeRole.collectAsStateWithLifecycle(initialValue = null)
 
-    // Smart start destination: skip login if already authenticated
     val startDestination = when {
         authState is AuthState.Authenticated && activeRole == "seeker" -> Screen.SeekerHome.route
         authState is AuthState.Authenticated && activeRole == "giver" -> Screen.GiverHome.route
         authState is AuthState.Authenticated -> Screen.RoleSelection.route
-        else -> Screen.Login.route
+        else -> Screen.Onboarding.route
     }
 
     NavHost(navController = navController, startDestination = startDestination) {
+        composable(Screen.Onboarding.route) {
+            OnboardingScreen(
+                onFinishOnboarding = {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(Screen.Onboarding.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+
         composable(Screen.Login.route) {
             LoginScreen(
                 viewModel = authViewModel,
