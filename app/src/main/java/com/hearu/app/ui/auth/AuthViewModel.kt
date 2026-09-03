@@ -19,6 +19,7 @@ class AuthViewModel @Inject constructor(
 ) : ViewModel() {
 
     val activeRole = rolePreferences.activeRoleFlow
+    val isOnboardingCompleted = rolePreferences.isOnboardingCompletedFlow
 
     private val _authState = MutableStateFlow<AuthState>(AuthState.Idle)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
@@ -39,7 +40,7 @@ class AuthViewModel @Inject constructor(
                 _authState.value = AuthState.Error("Email and password are required.")
                 return
             }
-            !Patterns.EMAIL_ADDRESS.matcher(email).matches() -> {
+            !isValidEmail(email) -> {
                 _authState.value = AuthState.Error("Please enter a valid email address.")
                 return
             }
@@ -62,7 +63,7 @@ class AuthViewModel @Inject constructor(
                 _authState.value = AuthState.Error("Email and password are required.")
                 return
             }
-            !Patterns.EMAIL_ADDRESS.matcher(email).matches() -> {
+            !isValidEmail(email) -> {
                 _authState.value = AuthState.Error("Please enter a valid email address.")
                 return
             }
@@ -79,9 +80,20 @@ class AuthViewModel @Inject constructor(
         }
     }
 
+    private fun isValidEmail(email: String): Boolean {
+        val regex = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$".toRegex()
+        return email.isNotBlank() && regex.matches(email)
+    }
+
     fun saveRole(role: String) {
         viewModelScope.launch {
             rolePreferences.setActiveRole(role)
+        }
+    }
+
+    fun setOnboardingCompleted(completed: Boolean) {
+        viewModelScope.launch {
+            rolePreferences.setOnboardingCompleted(completed)
         }
     }
 

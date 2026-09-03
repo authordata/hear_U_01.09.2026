@@ -44,6 +44,9 @@ class RolePreferences @Inject constructor(@ApplicationContext private val contex
         prefs[Keys.ONBOARDING_COMPLETED] ?: false
     }
 
+    val isOnboardingCompletedFlow: Flow<Boolean>
+        get() = onboardingCompletedFlow
+
     val isBiometricEnabledFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[Keys.BIOMETRIC_ENABLED] ?: false
     }
