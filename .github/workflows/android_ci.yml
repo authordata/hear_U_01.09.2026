@@ -35,13 +35,19 @@ jobs:
 
       - name: Run Unit Tests
         run: |
-          ./gradlew testDebugUnitTest --stacktrace --no-daemon || {
-            echo "## ❌ Unit Test Failures" >> $GITHUB_STEP_SUMMARY
-            for f in $(find app/build/test-results -name "*.xml"); do
-              echo "### $(basename $f)" >> $GITHUB_STEP_SUMMARY
-              echo '```xml' >> $GITHUB_STEP_SUMMARY
-              cat "$f" >> $GITHUB_STEP_SUMMARY
-              echo '```' >> $GITHUB_STEP_SUMMARY
+          ./gradlew testDebugUnitTest --stacktrace --no-daemon 2>&1 | tee test_run.log || {
+            echo "::error::Unit test execution failed!"
+            grep -A 25 "\* What went wrong:" test_run.log | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+            grep -B 2 -A 5 "e: " test_run.log | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+            grep -B 1 -A 5 "FAILURE:" test_run.log | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+            grep -E "FAILED|EXCEPTION" test_run.log | while IFS= read -r line; do
+              echo "::error::$line"
             done
             exit 1
           }
