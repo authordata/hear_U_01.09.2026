@@ -34,7 +34,24 @@ jobs:
           chmod +x gradlew
 
       - name: Run Unit Tests
-        run: ./gradlew testDebugUnitTest --stacktrace --no-daemon
+        run: |
+          ./gradlew testDebugUnitTest --stacktrace --no-daemon || {
+            echo "## ❌ Unit Test Failures" >> $GITHUB_STEP_SUMMARY
+            for f in $(find app/build/test-results -name "*.xml"); do
+              echo "### $(basename $f)" >> $GITHUB_STEP_SUMMARY
+              echo '```xml' >> $GITHUB_STEP_SUMMARY
+              cat "$f" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+            done
+            exit 1
+          }
+
+      - name: Upload Test Results Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: app/build/test-results/testDebugUnitTest/
 
       - name: Assemble Debug APK
         run: ./gradlew assembleDebug --stacktrace --no-daemon
