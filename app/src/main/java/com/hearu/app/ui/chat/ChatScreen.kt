@@ -49,8 +49,10 @@ import java.util.Locale
 @Composable
 fun ChatScreen(
     sessionId: String,
-    userId: String,
+    userId: String = "",
+    peerId: String = userId,
     onNavigateBack: () -> Unit,
+    onNavigateToCrisis: () -> Unit = {},
     viewModel: ChatViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -266,7 +268,7 @@ fun ChatScreen(
                             val duration = recordingDuration
                             isRecording = false
                             if (duration > 0) {
-                                viewModel.stopAndSendVoiceRecording()
+                                viewModel.sendVoiceNote(duration)
                             }
                         },
                         onCancelRecording = { isRecording = false }
