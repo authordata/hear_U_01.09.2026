@@ -2,7 +2,6 @@ package com.hearu.app.ui.dialogs
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -15,23 +14,17 @@ fun ReportUserDialog(
     onDismiss: () -> Unit,
     onSubmitReport: (reason: String, details: String) -> Unit
 ) {
-    val reasons = listOf(
-        "Inappropriate / Harassing Language",
-        "Breach of Confidentiality",
-        "Spam or Solicitation",
-        "Impersonation",
-        "Other Safety Concern"
-    )
+    val reasons = listOf("Harassment / Hate Speech", "Inappropriate Content", "Spam / Scams", "Safety Concern / Self Harm")
     var selectedReason by rememberSaveable { mutableStateOf(reasons[0]) }
     var details by rememberSaveable { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Report User for Moderation") },
+        title = { Text("Report User") },
         text = {
             Column {
-                Text("Help us keep HearU safe and respectful. Select a reason:", style = MaterialTheme.typography.bodyMedium)
-                Spacer(modifier = Modifier.height(12.dp))
+                Text("Please select a reason for reporting this conversation:", style = MaterialTheme.typography.bodyMedium)
+                Spacer(modifier = Modifier.height(8.dp))
                 reasons.forEach { reason ->
                     Row(
                         modifier = Modifier
@@ -48,14 +41,14 @@ fun ReportUserDialog(
                             onClick = null
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(reason, style = MaterialTheme.typography.bodySmall)
+                        Text(reason, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = details,
                     onValueChange = { details = it },
-                    placeholder = { Text("Optional details (max 500 chars)...") },
+                    label = { Text("Additional details (optional)") },
                     modifier = Modifier.fillMaxWidth(),
                     maxLines = 3
                 )

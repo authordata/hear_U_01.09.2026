@@ -1,12 +1,13 @@
 package com.hearu.app.ai
 
 import com.google.firebase.Firebase
-import com.google.firebase.ai.ai
-import com.google.firebase.ai.type.GenerativeModel
-import com.google.firebase.ai.type.HarmBlockThreshold
-import com.google.firebase.ai.type.HarmCategory
-import com.google.firebase.ai.type.SafetySetting
-import com.google.firebase.ai.type.generationConfig
+import com.google.firebase.vertexai.vertexAI
+import com.google.firebase.vertexai.GenerativeModel
+import com.google.firebase.vertexai.type.HarmBlockThreshold
+import com.google.firebase.vertexai.type.HarmCategory
+import com.google.firebase.vertexai.type.SafetySetting
+import com.google.firebase.vertexai.type.content
+import com.google.firebase.vertexai.type.generationConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -15,7 +16,7 @@ import javax.inject.Singleton
 @Singleton
 class GeminiAiService @Inject constructor() {
 
-    private val systemInstruction = """
+    private val systemInstructionText = """
         You are a warm, empathetic AI companion on HearU — an emotional support platform.
         Your role is to listen actively, validate feelings without judgment, and offer gentle guidance.
         CRITICAL RULES:
@@ -33,15 +34,15 @@ class GeminiAiService @Inject constructor() {
     )
 
     private val generativeModel by lazy {
-        Firebase.ai.generativeModel(
-            modelName = "gemini-3.7-flash",
+        Firebase.vertexAI.generativeModel(
+            modelName = "gemini-1.5-flash",
             generationConfig = generationConfig {
                 temperature = 0.7f
                 topK = 40
                 topP = 0.95f
                 maxOutputTokens = 800
             },
-            systemInstruction = systemInstruction,
+            systemInstruction = content { text(systemInstructionText) },
             safetySettings = safetySettings
         )
     }
