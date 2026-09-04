@@ -15,12 +15,16 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -52,11 +56,14 @@ fun ChatScreen(
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val isSending by viewModel.isSending.collectAsStateWithLifecycle()
     val errorState by viewModel.errorState.collectAsStateWithLifecycle()
+    val isPhotoRevealed by viewModel.isPhotoRevealed.collectAsStateWithLifecycle()
+    val myPhotoConsent by viewModel.myPhotoConsent.collectAsStateWithLifecycle()
 
     var inputText by rememberSaveable { mutableStateOf("") }
     var showMenu by rememberSaveable { mutableStateOf(false) }
     var showReportDialog by rememberSaveable { mutableStateOf(false) }
     var showCrisisDialog by rememberSaveable { mutableStateOf(false) }
+    var showPhotoConsentDialog by rememberSaveable { mutableStateOf(false) }
     var showQuickSupportBanner by rememberSaveable { mutableStateOf(true) }
 
     // Audio Voice Note Recording State
@@ -99,18 +106,71 @@ fun ChatScreen(
         )
     }
 
+    if (showPhotoConsentDialog) {
+        AlertDialog(
+            onDismissRequest = { showPhotoConsentDialog = false },
+            icon = {
+                Icon(
+                    imageVector = if (myPhotoConsent) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            },
+            title = { Text("Mutual Photo Reveal Consent") },
+            text = {
+                Text(
+                    "HearU safeguards your privacy by cryptographically blurring profile photos by default.\n\n" +
+                    "To unblur avatars, both you and your peer must independently grant mutual consent. " +
+                    "Either person can revoke consent at any time to instantly re-blur."
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.togglePhotoConsent()
+                        showPhotoConsentDialog = false
+                    }
+                ) {
+                    Text(if (myPhotoConsent) "Revoke Consent (Re-blur)" else "Grant Mutual Consent")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPhotoConsentDialog = false }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(10.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF4CAF50))
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(contentAlignment = Alignment.BottomEnd) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primaryContainer)
+                                    .then(if (!isPhotoRevealed) Modifier.blur(10.dp) else Modifier),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = "Peer Avatar",
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF4CAF50))
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
                                 text = "Empathetic Listener",
@@ -118,7 +178,7 @@ fun ChatScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "End-to-end ephemeral peer chat",
+                                text = if (isPhotoRevealed) "Photos unblurred (mutual consent)" else "End-to-end ephemeral peer chat",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -131,6 +191,13 @@ fun ChatScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showPhotoConsentDialog = true }) {
+                        Icon(
+                            imageVector = if (isPhotoRevealed) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                            contentDescription = "Photo Reveal Consent",
+                            tint = if (isPhotoRevealed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     IconButton(onClick = {
                         showCrisisDialog = true
                         onNavigateToCrisis()
@@ -148,6 +215,19 @@ fun ChatScreen(
                         expanded = showMenu,
                         onDismissRequest = { showMenu = false }
                     ) {
+                        DropdownMenuItem(
+                            text = { Text(if (myPhotoConsent) "Revoke Photo Consent" else "Mutual Photo Reveal Consent") },
+                            onClick = {
+                                showMenu = false
+                                showPhotoConsentDialog = true
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    if (myPhotoConsent) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = null
+                                )
+                            }
+                        )
                         DropdownMenuItem(
                             text = { Text("Crisis Resources (988)") },
                             onClick = {

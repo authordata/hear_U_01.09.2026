@@ -92,4 +92,21 @@ class AuthViewModelTest {
         val state = viewModel.authState.value
         assert(state is AuthState.Error && state.message.contains("at least 8 characters"))
     }
+
+    @Test
+    fun `signInAnonymously transitions through Loading to Authenticated on success`() = runTest(testDispatcher) {
+        runBlocking {
+            whenever(authRepository.signInAnonymously())
+                .thenReturn(AuthResult.Success(mockUser))
+        }
+
+        viewModel.authState.test {
+            assertEquals(AuthState.Idle, awaitItem())
+            viewModel.signInAnonymously()
+            testDispatcher.scheduler.runCurrent()
+            assertEquals(AuthState.Loading, awaitItem())
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertEquals(AuthState.Authenticated, awaitItem())
+        }
+    }
 }

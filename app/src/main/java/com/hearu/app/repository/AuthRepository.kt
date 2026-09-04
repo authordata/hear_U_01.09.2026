@@ -38,6 +38,16 @@ class AuthRepository @Inject constructor(
         }
     }
 
+    suspend fun signInAnonymously(): AuthResult {
+        return try {
+            val result = auth.signInAnonymously().await()
+            val user = result.user ?: throw Exception("Anonymous authentication returned empty user")
+            AuthResult.Success(user)
+        } catch (e: Exception) {
+            AuthResult.Failure(e)
+        }
+    }
+
     fun signOut() {
         auth.signOut()
     }

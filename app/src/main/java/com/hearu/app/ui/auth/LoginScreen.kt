@@ -7,6 +7,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
@@ -36,6 +37,7 @@ enum class AuthMode {
 fun LoginScreen(
     onLoginSubmit: (String, String) -> Unit = { _, _ -> },
     onSignUpSubmit: (String, String) -> Unit = { _, _ -> },
+    onAnonymousSubmit: () -> Unit = {},
     viewModel: AuthViewModel = hiltViewModel(),
     initialMode: AuthMode = AuthMode.SIGN_IN
 ) {
@@ -45,6 +47,8 @@ fun LoginScreen(
     var confirmPassword by rememberSaveable { mutableStateOf("") }
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
     var confirmPasswordVisible by rememberSaveable { mutableStateOf(false) }
+    var isAgeConfirmed by rememberSaveable { mutableStateOf(false) }
+    var showAgeGateDialog by rememberSaveable { mutableStateOf(false) }
     var localError by rememberSaveable { mutableStateOf<String?>(null) }
 
     val authState by viewModel.authState.collectAsStateWithLifecycle()
@@ -202,6 +206,31 @@ fun LoginScreen(
             }
         }
 
+        // 18+ Age Verification Policy Gate (Sign Up Mode)
+        AnimatedVisibility(visible = authMode == AuthMode.SIGN_UP) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp)
+            ) {
+                Checkbox(
+                    checked = isAgeConfirmed,
+                    onCheckedChange = {
+                        isAgeConfirmed = it
+                        localError = null
+                    },
+                    modifier = Modifier.testTag("age_gate_checkbox")
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "I certify that I am 18 years of age or older and agree to HearU's safe haven guidelines.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+
         // Inline Error Message
         AnimatedVisibility(visible = activeErrorMessage != null) {
             activeErrorMessage?.let { msg ->
@@ -224,13 +253,13 @@ fun LoginScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         // Main Action Button (Sign In or Sign Up)
         val isFormValid = if (authMode == AuthMode.SIGN_IN) {
             email.isNotBlank() && password.isNotBlank()
         } else {
-            email.isNotBlank() && password.isNotBlank() && confirmPassword.isNotBlank()
+            email.isNotBlank() && password.isNotBlank() && confirmPassword.isNotBlank() && isAgeConfirmed
         }
 
         Button(
@@ -242,6 +271,8 @@ fun LoginScreen(
                         localError = "Passwords do not match"
                     } else if (password.length < 8) {
                         localError = "Password must be at least 8 characters."
+                    } else if (!isAgeConfirmed) {
+                        localError = "You must be at least 18 years old to join HearU."
                     } else {
                         localError = null
                         onSignUpSubmit(email, password)
@@ -274,6 +305,53 @@ fun LoginScreen(
             }
         }
 
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Anonymous Guest Access with Divider
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            HorizontalDivider(modifier = Modifier.weight(1f))
+            Text(
+                text = " OR ",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            )
+            HorizontalDivider(modifier = Modifier.weight(1f))
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        OutlinedButton(
+            onClick = {
+                if (!isAgeConfirmed) {
+                    showAgeGateDialog = true
+                } else {
+                    onAnonymousSubmit()
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+                .testTag("anonymous_login_button"),
+            shape = RoundedCornerShape(12.dp),
+            enabled = !isLoading
+        ) {
+            Icon(
+                imageVector = Icons.Default.Shield,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Continue as Anonymous Guest",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
 
         // Toggle Mode Secondary Action
@@ -295,6 +373,33 @@ fun LoginScreen(
                 fontWeight = FontWeight.SemiBold
             )
         }
+    }
+
+    if (showAgeGateDialog) {
+        AlertDialog(
+            onDismissRequest = { showAgeGateDialog = false },
+            icon = { Icon(Icons.Default.Shield, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+            title = { Text("18+ Age Requirement") },
+            text = {
+                Text("HearU provides peer emotional support exclusively for adults aged 18 and older. To enter as an anonymous guest, please confirm you meet the age requirement.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        isAgeConfirmed = true
+                        showAgeGateDialog = false
+                        onAnonymousSubmit()
+                    }
+                ) {
+                    Text("I am 18 or Older")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAgeGateDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
