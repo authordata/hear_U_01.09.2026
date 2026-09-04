@@ -34,24 +34,7 @@ jobs:
           chmod +x gradlew
 
       - name: Run Unit Tests
-        run: |
-          ./gradlew testDebugUnitTest --stacktrace --no-daemon > test_run.log 2>&1 || {
-            echo "::error::Unit test task failed!"
-            grep -A 20 "\* What went wrong:" test_run.log | while IFS= read -r line; do
-              echo "::error::$line"
-            done
-            grep -B 1 -A 4 "e: " test_run.log | while IFS= read -r line; do
-              echo "::error::$line"
-            done
-            grep -E "FAILURE|FAILED" test_run.log | while IFS= read -r line; do
-              echo "::error::$line"
-            done
-            for f in $(find app/build/test-results -name "*.xml"); do
-              echo "=== $f ==="
-              cat "$f"
-            done
-            exit 1
-          }
+        run: ./gradlew testDebugUnitTest --stacktrace --no-daemon
 
       - name: Assemble Debug APK
         run: ./gradlew assembleDebug --stacktrace --no-daemon
