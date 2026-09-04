@@ -1,6 +1,7 @@
 package com.hearu.app.ui.onboarding
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
@@ -35,6 +36,7 @@ data class OnboardingPage(
     val iconTint: Color
 )
 
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun OnboardingScreen(
     onFinishOnboarding: () -> Unit
@@ -74,22 +76,30 @@ fun OnboardingScreen(
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Top Bar Skip Button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
                 if (pagerState.currentPage < pages.size - 1) {
                     TextButton(onClick = onFinishOnboarding) {
-                        Text("Skip", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            text = "Skip",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 } else {
                     Spacer(modifier = Modifier.height(48.dp))
                 }
             }
 
+            // Pager Content
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
             ) { pageIndex ->
                 val page = pages[pageIndex]
                 Column(
@@ -99,19 +109,19 @@ fun OnboardingScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(120.dp)
-                            .clip(CircleShape)
-                            .background(page.iconTint.copy(alpha = 0.12f)),
-                        contentAlignment = Alignment.Center
+                    Surface(
+                        shape = CircleShape,
+                        color = page.iconTint.copy(alpha = 0.12f),
+                        modifier = Modifier.size(120.dp)
                     ) {
-                        Icon(
-                            imageVector = page.icon,
-                            contentDescription = null,
-                            tint = page.iconTint,
-                            modifier = Modifier.size(64.dp)
-                        )
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = page.icon,
+                                contentDescription = page.title,
+                                tint = page.iconTint,
+                                modifier = Modifier.size(64.dp)
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(32.dp))
@@ -121,7 +131,7 @@ fun OnboardingScreen(
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onBackground
+                        color = MaterialTheme.colorScheme.onSurface
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -129,8 +139,8 @@ fun OnboardingScreen(
                     Text(
                         text = page.subtitle,
                         style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.SemiBold,
-                        color = page.iconTint,
                         textAlign = TextAlign.Center
                     )
 
@@ -140,34 +150,33 @@ fun OnboardingScreen(
                         text = page.description,
                         style = MaterialTheme.typography.bodyLarge,
                         textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.2
                     )
                 }
             }
 
-            // Step Indicator Dots
+            // Dots Indicator
             Row(
-                horizontalArrangement = Arrangement.Center,
-                modifier = Modifier.padding(vertical = 16.dp)
+                modifier = Modifier.padding(vertical = 24.dp),
+                horizontalArrangement = Arrangement.Center
             ) {
-                repeat(pages.size) { index ->
-                    val isSelected = pagerState.currentPage == index
+                repeat(pages.size) { iteration ->
+                    val isSelected = pagerState.currentPage == iteration
                     Box(
                         modifier = Modifier
                             .padding(4.dp)
-                            .height(8.dp)
-                            .width(if (isSelected) 24.dp else 8.dp)
                             .clip(CircleShape)
                             .background(
-                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+                                if (isSelected) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surfaceVariant
                             )
+                            .size(if (isSelected) 10.dp else 8.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Next / Get Started Button
+            // Bottom Action Button
             Button(
                 onClick = {
                     if (pagerState.currentPage < pages.size - 1) {
@@ -181,10 +190,11 @@ fun OnboardingScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
-                shape = RoundedCornerShape(14.dp)
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
                 Text(
-                    text = if (pagerState.currentPage == pages.size - 1) "Enter Safe Space" else "Continue",
+                    text = if (pagerState.currentPage == pages.size - 1) "Get Started" else "Continue",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
