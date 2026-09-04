@@ -10,7 +10,7 @@ lifecycleRuntimeKtx = "2.8.4"
 lifecycleRuntimeCompose = "2.8.4"
 activityCompose = "1.9.1"
 composeBom = "2024.06.00"
-firebaseBom = "34.18.0"
+firebaseBom = "33.2.0"
 hilt = "2.52"
 navigationCompose = "2.7.7"
 biometric = "1.2.0-alpha05"
@@ -45,7 +45,7 @@ firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics
 firebase-auth = { group = "com.google.firebase", name = "firebase-auth" }
 firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore" }
 firebase-functions = { group = "com.google.firebase", name = "firebase-functions" }
-firebase-ai = { group = "com.google.firebase", name = "firebase-ai" }
+firebase-vertexai = { group = "com.google.firebase", name = "firebase-vertexai", version = "16.0.0" }
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
 
 # Navigation & Biometric
@@ -68,6 +68,7 @@ mockito-core = { group = "org.mockito", name = "mockito-core", version.ref = "mo
 mockito-kotlin = { group = "org.mockito.kotlin", name = "mockito-kotlin", version.ref = "mockitoKotlin" }
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
 coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutinesTest" }
+coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "coroutinesTest" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

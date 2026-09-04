@@ -86,6 +86,7 @@ dependencies {
     implementation(libs.firebase.functions)
     implementation(libs.firebase.vertexai)
     implementation(libs.firebase.messaging)
+    implementation(libs.coroutines.play.services)
 
     // Navigation & Biometrics
     implementation(libs.androidx.navigation.compose)
