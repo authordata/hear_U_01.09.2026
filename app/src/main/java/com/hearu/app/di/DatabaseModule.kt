@@ -26,6 +26,7 @@ object DatabaseModule {
     }
 
     @Provides
+    @Singleton
     fun provideMessageDao(database: AppDatabase): MessageDao {
         return database.messageDao()
     }

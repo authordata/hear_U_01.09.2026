@@ -49,7 +49,7 @@ class HearUFirebaseMessagingService : FirebaseMessagingService() {
                     userRepository.updateFcmToken(currentUid, token)
                     Log.d(TAG, "Successfully synced FCM token for user: $currentUid")
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to sync FCM token to Firestore: ${e.message}")
+                    Log.e(TAG, "Failed to sync FCM token to Firestore: ${e.message}", e)
                 }
             }
         }
@@ -59,71 +59,54 @@ class HearUFirebaseMessagingService : FirebaseMessagingService() {
         super.onMessageReceived(remoteMessage)
         Log.d(TAG, "FCM Message received from: ${remoteMessage.from}")
 
-        // Ensure channels are created
-        createNotificationChannels(this)
-
         val data = remoteMessage.data
-        val notification = remoteMessage.notification
+        val notificationType = data[EXTRA_NOTIFICATION_TYPE] ?: TYPE_CHAT_MESSAGE
+        val sessionId = data[EXTRA_SESSION_ID] ?: ""
+        val senderId = data[EXTRA_USER_ID] ?: ""
 
-        val type = data["type"] ?: "general"
-        val sessionId = data["sessionId"] ?: ""
-        val userId = data["userId"] ?: ""
-        val senderName = data["senderName"] ?: "A Peer"
+        val title = remoteMessage.notification?.title ?: when (notificationType) {
+            TYPE_SESSION_REQUEST -> "New Listener Request"
+            TYPE_CRISIS_ALERT -> "Emergency Alert"
+            else -> "HearU Message"
+        }
 
-        val title = notification?.title
-            ?: data["title"]
-            ?: when (type) {
-                TYPE_SESSION_REQUEST -> "New Listening Request"
-                TYPE_CHAT_MESSAGE -> "New Message from $senderName"
-                TYPE_CRISIS_ALERT -> "Emergency Crisis Alert"
-                TYPE_SESSION_ENDED -> "Session Concluded"
-                else -> "HearU Notification"
-            }
+        val body = remoteMessage.notification?.body ?: data["message"] ?: "You have a new update in HearU."
 
-        val body = notification?.body
-            ?: data["body"]
-            ?: data["messageText"]
-            ?: when (type) {
-                TYPE_SESSION_REQUEST -> "Someone is seeking empathetic support right now."
-                TYPE_CHAT_MESSAGE -> "You have received a new compassionate response."
-                TYPE_CRISIS_ALERT -> "A peer requires urgent support. Safety resources are available."
-                TYPE_SESSION_ENDED -> "Your conversation has concluded. Please take a moment to reflect."
-                else -> "You have a new update from HearU."
-            }
-
-        showNotification(
-            type = type,
+        sendNotification(
             title = title,
             body = body,
+            notificationType = notificationType,
             sessionId = sessionId,
-            userId = userId
+            userId = senderId
         )
     }
 
-    private fun showNotification(
-        type: String,
+    private fun sendNotification(
         title: String,
         body: String,
+        notificationType: String,
         sessionId: String,
         userId: String
     ) {
-        val channelId = when (type) {
+        val channelId = when (notificationType) {
             TYPE_SESSION_REQUEST -> CHANNEL_SESSION_REQUESTS
             TYPE_CRISIS_ALERT -> CHANNEL_SAFETY_ALERTS
             else -> CHANNEL_CHAT_MESSAGES
         }
 
         val intent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(EXTRA_NOTIFICATION_TYPE, type)
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(EXTRA_NOTIFICATION_TYPE, notificationType)
             putExtra(EXTRA_SESSION_ID, sessionId)
             putExtra(EXTRA_USER_ID, userId)
         }
 
-        val pendingIntentFlags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-
-        val notificationId = (System.currentTimeMillis() % 100000).toInt()
-        val pendingIntent = PendingIntent.getActivity(this, notificationId, intent, pendingIntentFlags)
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            System.currentTimeMillis().toInt(),
+            intent,
+            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
+        )
 
         val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
@@ -135,16 +118,16 @@ class HearUFirebaseMessagingService : FirebaseMessagingService() {
             .setSound(defaultSoundUri)
             .setContentIntent(pendingIntent)
             .setPriority(
-                if (type == TYPE_CRISIS_ALERT) NotificationCompat.PRIORITY_MAX
+                if (notificationType == TYPE_CRISIS_ALERT) NotificationCompat.PRIORITY_MAX
                 else NotificationCompat.PRIORITY_HIGH
             )
 
-        if (type == TYPE_CRISIS_ALERT) {
-            notificationBuilder.setVibrate(longArrayOf(0, 500, 200, 500))
-            notificationBuilder.setLights(Color.RED, 1000, 1000)
+        if (notificationType == TYPE_CRISIS_ALERT) {
+            notificationBuilder.setColor(Color.RED)
         }
 
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationId = System.currentTimeMillis().toInt()
         notificationManager.notify(notificationId, notificationBuilder.build())
     }
 
