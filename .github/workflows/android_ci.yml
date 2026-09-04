@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ "main" ]
 
+permissions:
+  contents: write
+  issues: write
+
 jobs:
   build:
     name: Build & Test HearU
@@ -34,21 +38,13 @@ jobs:
           chmod +x gradlew
 
       - name: Run Unit Tests
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ./gradlew testDebugUnitTest --stacktrace --no-daemon 2>&1 | tee test_run.log || {
             echo "::error::Unit test execution failed!"
-            grep -A 25 "\* What went wrong:" test_run.log | while IFS= read -r line; do
-              echo "::error::$line"
-            done
-            grep -B 2 -A 5 "e: " test_run.log | while IFS= read -r line; do
-              echo "::error::$line"
-            done
-            grep -B 1 -A 5 "FAILURE:" test_run.log | while IFS= read -r line; do
-              echo "::error::$line"
-            done
-            grep -E "FAILED|EXCEPTION" test_run.log | while IFS= read -r line; do
-              echo "::error::$line"
-            done
+            tail -n 200 test_run.log > failure_snippet.txt
+            gh issue create --repo authordata/hear_U_01.09.2026 --title "CI Build Failure Diagnostics" --body-file failure_snippet.txt || true
             exit 1
           }
 
