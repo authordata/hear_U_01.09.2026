@@ -8,6 +8,7 @@ import com.hearu.app.data.RolePreferences
 import com.hearu.app.ui.chat.AIChatViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -34,11 +35,11 @@ class AIChatViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
-        runTest(testDispatcher) {
+        whenever(auth.currentUser).thenReturn(mockUser)
+        whenever(mockUser.uid).thenReturn("test_uid_123")
+        runBlocking {
             whenever(preferences.getAiMessagesUsedToday()).thenReturn(0)
-            whenever(preferences.tryConsumeAiQuota(any())).thenReturn(true)
-            whenever(auth.currentUser).thenReturn(mockUser)
-            whenever(mockUser.uid).thenReturn("test_uid_123")
+            whenever(preferences.tryConsumeAiQuota(any<Int>())).thenReturn(true)
         }
         viewModel = AIChatViewModel(geminiService, preferences, auth)
     }
@@ -57,9 +58,11 @@ class AIChatViewModelTest {
 
     @Test
     fun `crisis detection flag activates on distress response`() = runTest(testDispatcher) {
-        whenever(geminiService.generateEmpatheticResponse(any())).thenReturn(
-            AiResult.Success("We are here to help. Please reach out.", isCrisisDetected = true)
-        )
+        runBlocking {
+            whenever(geminiService.generateEmpatheticResponse(any<String>())).thenReturn(
+                AiResult.Success("We are here to help. Please reach out.", isCrisisDetected = true)
+            )
+        }
 
         viewModel.sendMessage("I feel like giving up")
         testDispatcher.scheduler.advanceUntilIdle()

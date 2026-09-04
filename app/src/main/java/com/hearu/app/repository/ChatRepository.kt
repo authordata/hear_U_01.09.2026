@@ -1,6 +1,7 @@
 package com.hearu.app.repository
 
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import com.hearu.app.data.local.dao.MessageDao
 import com.hearu.app.data.local.entity.MessageEntity
@@ -12,6 +13,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -21,6 +23,7 @@ class ChatRepository @Inject constructor(
     private val messageDao: MessageDao
 ) {
     private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val activeListeners = ConcurrentHashMap<String, ListenerRegistration>()
 
     /**
      * Returns Room as Single Source of Truth.
@@ -34,31 +37,37 @@ class ChatRepository @Inject constructor(
     }
 
     private fun startFirestoreSync(sessionId: String) {
-        repositoryScope.launch {
-            firestore.collection("sessions")
-                .document(sessionId)
-                .collection("messages")
-                .orderBy("timestamp", Query.Direction.ASCENDING)
-                .addSnapshotListener { snapshot, error ->
-                    if (error != null || snapshot == null) return@addSnapshotListener
-                    val entities = snapshot.documents.mapNotNull { doc ->
-                        val msg = doc.toObject(Message::class.java) ?: return@mapNotNull null
-                        MessageEntity(
-                            id = doc.id,
-                            sessionId = sessionId,
-                            senderId = msg.senderId,
-                            text = msg.text,
-                            timestamp = msg.timestamp,
-                            isSystemMessage = msg.isSystemMessage,
-                            isVoiceNote = msg.isVoiceNote,
-                            voiceDurationSeconds = msg.voiceDurationSeconds
-                        )
-                    }
-                    repositoryScope.launch {
-                        messageDao.insertMessages(entities)
-                    }
+        if (activeListeners.containsKey(sessionId)) return
+
+        val registration = firestore.collection("sessions")
+            .document(sessionId)
+            .collection("messages")
+            .orderBy("timestamp", Query.Direction.ASCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+                val entities = snapshot.documents.mapNotNull { doc ->
+                    val msg = doc.toObject(Message::class.java) ?: return@mapNotNull null
+                    MessageEntity(
+                        id = doc.id,
+                        sessionId = sessionId,
+                        senderId = msg.senderId,
+                        text = msg.text,
+                        timestamp = msg.timestamp,
+                        isSystemMessage = msg.isSystemMessage,
+                        isVoiceNote = msg.isVoiceNote,
+                        voiceDurationSeconds = msg.voiceDurationSeconds
+                    )
                 }
-        }
+                repositoryScope.launch {
+                    messageDao.insertMessages(entities)
+                }
+            }
+
+        activeListeners[sessionId] = registration
+    }
+
+    fun stopFirestoreSync(sessionId: String) {
+        activeListeners.remove(sessionId)?.remove()
     }
 
     suspend fun sendMessage(sessionId: String, message: Message) {
@@ -91,6 +100,7 @@ class ChatRepository @Inject constructor(
     }
 
     suspend fun clearLocalSession(sessionId: String) {
+        stopFirestoreSync(sessionId)
         messageDao.clearSession(sessionId)
     }
 }

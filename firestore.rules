@@ -21,7 +21,7 @@ service cloud.firestore {
       // Update: owner can only modify safe fields, not rating/role/createdAt
       allow update: if isOwner(userId)
         && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['displayName', 'emotionTags', 'status', 'photoUrl']);
+            .hasOnly(['displayName', 'emotionTags', 'status', 'photoUrl', 'fcmToken', 'tokenUpdatedAt']);
       // Soft-delete only (mark inactive), hard delete forbidden
       allow delete: if false;
     }

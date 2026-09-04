@@ -42,18 +42,27 @@ sealed class Screen(val route: String) {
 
 @Composable
 fun HearUNavigation(
-    authViewModel: AuthViewModel = hiltViewModel()
+    authViewModel: AuthViewModel = hiltViewModel(),
+    initialSessionId: String? = null
 ) {
     val navController = rememberNavController()
     val coroutineScope = rememberCoroutineScope()
     val authState by authViewModel.authState.collectAsStateWithLifecycle()
     val activeRole by authViewModel.activeRole.collectAsStateWithLifecycle(initialValue = null)
+    val isOnboardingCompleted by authViewModel.isOnboardingCompleted.collectAsStateWithLifecycle(initialValue = false)
 
     val startDestination = when {
         authState is AuthState.Authenticated && activeRole == "seeker" -> Screen.SeekerHome.route
         authState is AuthState.Authenticated && activeRole == "giver" -> Screen.GiverHome.route
         authState is AuthState.Authenticated -> Screen.RoleSelection.route
+        isOnboardingCompleted -> Screen.Login.route
         else -> Screen.Onboarding.route
+    }
+
+    LaunchedEffect(initialSessionId, authState) {
+        if (!initialSessionId.isNullOrBlank() && authState is AuthState.Authenticated) {
+            navController.navigate(Screen.Chat.createRoute(initialSessionId, "peer"))
+        }
     }
 
     NavHost(navController = navController, startDestination = startDestination) {
@@ -122,10 +131,31 @@ fun HearUNavigation(
             )
         ) { backStackEntry ->
             val sessionId = backStackEntry.arguments?.getString("sessionId") ?: ""
-            val userId = backStackEntry.arguments?.getString("userId") ?: ""
+            val peerId = backStackEntry.arguments?.getString("userId") ?: ""
             ChatScreen(
                 sessionId = sessionId,
-                userId = userId,
+                peerId = peerId,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToCrisis = { navController.navigate(Screen.EmergencyHub.route) }
+            )
+        }
+
+        composable(Screen.AIChat.route) {
+            AIChatScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToCrisis = { navController.navigate(Screen.EmergencyHub.route) }
+            )
+        }
+
+        composable(Screen.BreathingExercise.route) {
+            BreathingExerciseScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onEmergencyClick = { navController.navigate(Screen.EmergencyHub.route) }
+            )
+        }
+
+        composable(Screen.EmergencyHub.route) {
+            EmergencyScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }
@@ -133,27 +163,12 @@ fun HearUNavigation(
         composable(Screen.Profile.route) {
             ProfileScreen(
                 onNavigateBack = { navController.popBackStack() },
-                authViewModel = authViewModel
-            )
-        }
-
-        composable(Screen.AIChat.route) {
-            AIChatScreen(
-                onNavigateBack = { navController.popBackStack() },
-                onNavigateToBreathing = { navController.navigate(Screen.BreathingExercise.route) }
-            )
-        }
-
-        composable(Screen.BreathingExercise.route) {
-            BreathingExerciseScreen(
-                onNavigateBack = { navController.popBackStack() }
-            )
-        }
-
-        composable(Screen.EmergencyHub.route) {
-            EmergencyScreen(
-                onNavigateBack = { navController.popBackStack() },
-                onNavigateToBreathing = { navController.navigate(Screen.BreathingExercise.route) }
+                onSignOut = {
+                    authViewModel.signOut()
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
             )
         }
     }

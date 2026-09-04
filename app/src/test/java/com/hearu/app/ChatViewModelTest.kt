@@ -1,6 +1,5 @@
 package com.hearu.app
 
-import app.cash.turbine.test
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.hearu.app.audio.VoiceNoteManager
@@ -9,7 +8,9 @@ import com.hearu.app.repository.ChatRepository
 import com.hearu.app.ui.chat.ChatViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -37,12 +38,16 @@ class ChatViewModelTest {
         Dispatchers.setMain(testDispatcher)
         whenever(auth.currentUser).thenReturn(mockUser)
         whenever(mockUser.uid).thenReturn("test_user_456")
-        whenever(voiceNoteManager.isRecording).thenReturn(kotlinx.coroutines.flow.MutableStateFlow(false))
-        whenever(voiceNoteManager.recordingDuration).thenReturn(kotlinx.coroutines.flow.MutableStateFlow(0))
-        whenever(voiceNoteManager.liveAmplitudes).thenReturn(kotlinx.coroutines.flow.MutableStateFlow(emptyList()))
-        whenever(voiceNoteManager.playingMessageId).thenReturn(kotlinx.coroutines.flow.MutableStateFlow(null))
-        whenever(voiceNoteManager.playbackProgress).thenReturn(kotlinx.coroutines.flow.MutableStateFlow(0f))
-        whenever(voiceNoteManager.isPlaying).thenReturn(kotlinx.coroutines.flow.MutableStateFlow(false))
+        whenever(voiceNoteManager.isRecording).thenReturn(MutableStateFlow(false))
+        whenever(voiceNoteManager.recordingDuration).thenReturn(MutableStateFlow(0))
+        whenever(voiceNoteManager.liveAmplitudes).thenReturn(MutableStateFlow(emptyList()))
+        whenever(voiceNoteManager.playingMessageId).thenReturn(MutableStateFlow(null))
+        whenever(voiceNoteManager.playbackProgress).thenReturn(MutableStateFlow(0f))
+        whenever(voiceNoteManager.isPlaying).thenReturn(MutableStateFlow(false))
+
+        runBlocking {
+            whenever(chatRepository.sendMessage(any<String>(), any<Message>())).thenReturn(Unit)
+        }
 
         viewModel = ChatViewModel(chatRepository, auth, voiceNoteManager)
     }
@@ -80,11 +85,13 @@ class ChatViewModelTest {
         viewModel.sendMessage("Empathetic check-in")
         testDispatcher.scheduler.advanceUntilIdle()
 
-        verify(chatRepository).sendMessage(eq("session_123"), check { msg ->
-            assertEquals("Empathetic check-in", msg.text)
-            assertEquals("test_user_456", msg.senderId)
-            assertEquals(Message.TYPE_TEXT, msg.messageType)
-        })
+        runBlocking {
+            verify(chatRepository).sendMessage(eq("session_123"), check { msg ->
+                assertEquals("Empathetic check-in", msg.text)
+                assertEquals("test_user_456", msg.senderId)
+                assertEquals(Message.TYPE_TEXT, msg.messageType)
+            })
+        }
     }
 
     @Test
@@ -105,13 +112,15 @@ class ChatViewModelTest {
         viewModel.stopAndSendVoiceRecording()
         testDispatcher.scheduler.advanceUntilIdle()
 
-        verify(chatRepository).sendMessage(eq("session_123"), check { msg ->
-            assertEquals(Message.TYPE_VOICE, msg.messageType)
-            assertEquals(14, msg.audioDurationSec)
-            assertEquals(sampleAmplitudes, msg.waveformAmplitudes)
-            assertEquals(dummyFile.absolutePath, msg.audioUrl)
-            assertTrue(msg.text.contains("0:14"))
-        })
+        runBlocking {
+            verify(chatRepository).sendMessage(eq("session_123"), check { msg ->
+                assertEquals(Message.TYPE_VOICE, msg.messageType)
+                assertEquals(14, msg.audioDurationSec)
+                assertEquals(sampleAmplitudes, msg.waveformAmplitudes)
+                assertEquals(dummyFile.absolutePath, msg.audioUrl)
+                assertTrue(msg.text.contains("0:14"))
+            })
+        }
     }
 
     @Test

@@ -16,9 +16,13 @@ import kotlin.math.min
 import kotlin.random.Random
 
 @Singleton
-class VoiceNoteManager @Inject constructor() {
+class VoiceNoteManager(
+    private val mainDispatcher: CoroutineDispatcher = Dispatchers.Main
+) {
+    @Inject
+    constructor() : this(Dispatchers.Main)
 
-    private val managerScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val managerScope = CoroutineScope(SupervisorJob() + mainDispatcher)
 
     private var mediaRecorder: MediaRecorder? = null
     private var mediaPlayer: MediaPlayer? = null
@@ -131,22 +135,19 @@ class VoiceNoteManager @Inject constructor() {
                 release()
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error stopping MediaRecorder: ${e.message}")
+            Log.w(TAG, "Error stopping MediaRecorder: ${e.message}")
+        } finally {
+            mediaRecorder = null
         }
-        mediaRecorder = null
 
-        val duration = _recordingDuration.value.coerceAtLeast(1)
-        val finalAmplitudes = sampleWaveform(recordedAmplitudes, targetCount = 28)
+        val duration = _recordingDuration.value
+        val amps = recordedAmplitudes.ifEmpty { List(20) { Random.nextInt(25, 80) } }
 
-        val result = RecordingResult(
+        return RecordingResult(
             file = currentOutputFile,
-            durationSec = duration,
-            amplitudes = finalAmplitudes
+            durationSec = if (duration > 0) duration else 1,
+            amplitudes = amps
         )
-
-        _liveAmplitudes.value = emptyList()
-        _recordingDuration.value = 0
-        return result
     }
 
     fun cancelRecording() {
@@ -157,106 +158,113 @@ class VoiceNoteManager @Inject constructor() {
                 stop()
                 release()
             }
-        } catch (_: Exception) {}
-        mediaRecorder = null
-        currentOutputFile?.delete()
-        currentOutputFile = null
+        } catch (e: Exception) {
+            // Ignore cancel cleanup errors
+        } finally {
+            mediaRecorder = null
+            currentOutputFile?.delete()
+            currentOutputFile = null
+        }
         _liveAmplitudes.value = emptyList()
         _recordingDuration.value = 0
     }
 
-    fun togglePlayback(messageId: String, audioPathOrUrl: String?, durationSec: Int) {
+    fun togglePlayback(messageId: String, audioUrl: String?, durationSec: Int) {
         if (_playingMessageId.value == messageId && _isPlaying.value) {
             pausePlayback()
         } else if (_playingMessageId.value == messageId && !_isPlaying.value) {
             resumePlayback(durationSec)
         } else {
-            startPlayback(messageId, audioPathOrUrl, durationSec)
+            startPlayback(messageId, audioUrl, durationSec)
         }
     }
 
-    fun seekTo(messageId: String, fraction: Float, durationSec: Int) {
-        val totalDurationMs = (durationSec.coerceAtLeast(1) * 1000).toLong()
-        val targetMs = (fraction.coerceIn(0f, 1f) * totalDurationMs).toInt()
-        try {
-            mediaPlayer?.seekTo(targetMs)
-            _playbackProgress.value = fraction.coerceIn(0f, 1f)
-        } catch (_: Exception) {}
-    }
-
-    private fun startPlayback(messageId: String, audioPathOrUrl: String?, durationSec: Int) {
+    private fun startPlayback(messageId: String, audioUrl: String?, durationSec: Int) {
         stopPlayback()
 
         _playingMessageId.value = messageId
         _isPlaying.value = true
         _playbackProgress.value = 0f
 
-        val totalDurationMs = (durationSec.coerceAtLeast(1) * 1000).toLong()
-
-        val file = audioPathOrUrl?.let { File(it) }
-        var playerStarted = false
-
-        if (file != null && file.exists()) {
-            try {
-                val player = MediaPlayer().apply {
-                    setDataSource(file.absolutePath)
-                    prepare()
-                    start()
-                    setOnCompletionListener {
-                        stopPlayback()
-                    }
-                }
-                mediaPlayer = player
-                playerStarted = true
-            } catch (e: Exception) {
-                Log.w(TAG, "MediaPlayer hardware playback fallback: ${e.message}")
-            }
+        if (audioUrl.isNullOrBlank()) {
+            simulatePlayback(durationSec)
+            return
         }
 
-        playbackJob = managerScope.launch {
-            var elapsedMs = 0L
-            val stepMs = 50L
-            while (_isPlaying.value && elapsedMs < totalDurationMs) {
-                delay(stepMs)
-                elapsedMs += stepMs
-                val currentMs = mediaPlayer?.currentPosition?.toLong() ?: elapsedMs
-                val totalMs = mediaPlayer?.duration?.toLong()?.takeIf { it > 0 } ?: totalDurationMs
-                _playbackProgress.value = (currentMs.toFloat() / totalMs.toFloat()).coerceIn(0f, 1f)
+        val file = File(audioUrl)
+        if (!file.exists()) {
+            simulatePlayback(durationSec)
+            return
+        }
+
+        try {
+            val player = MediaPlayer().apply {
+                setDataSource(file.absolutePath)
+                prepare()
+                start()
+                setOnCompletionListener {
+                    stopPlayback()
+                }
             }
-            if (_isPlaying.value) {
-                stopPlayback()
+            mediaPlayer = player
+
+            playbackJob = managerScope.launch {
+                val totalDuration = if (durationSec > 0) durationSec * 1000 else player.duration
+                while (_isPlaying.value && player.isPlaying) {
+                    delay(50)
+                    val currentPos = player.currentPosition
+                    _playbackProgress.value = (currentPos.toFloat() / totalDuration).coerceIn(0f, 1f)
+                }
             }
+        } catch (e: Exception) {
+            Log.w(TAG, "Hardware MediaPlayer playback failed; falling back to simulated playback: ${e.message}")
+            simulatePlayback(durationSec)
         }
     }
 
-    private fun pausePlayback() {
+    private fun simulatePlayback(durationSec: Int) {
+        val totalMs = if (durationSec > 0) durationSec * 1000 else 5000
+        playbackJob?.cancel()
+        playbackJob = managerScope.launch {
+            val interval = 50L
+            var currentMs = 0L
+            while (_isPlaying.value && currentMs < totalMs) {
+                delay(interval)
+                currentMs += interval
+                _playbackProgress.value = (currentMs.toFloat() / totalMs).coerceIn(0f, 1f)
+            }
+            stopPlayback()
+        }
+    }
+
+    fun pausePlayback() {
         _isPlaying.value = false
         playbackJob?.cancel()
         try {
             mediaPlayer?.pause()
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.w(TAG, "Error pausing player: ${e.message}")
+        }
     }
 
     private fun resumePlayback(durationSec: Int) {
         _isPlaying.value = true
-        val totalDurationMs = (durationSec.coerceAtLeast(1) * 1000).toLong()
         try {
             mediaPlayer?.start()
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.w(TAG, "Error resuming player: ${e.message}")
+        }
+        val currentProgress = _playbackProgress.value
+        val totalMs = if (durationSec > 0) durationSec * 1000 else 5000
+        var currentMs = (currentProgress * totalMs).toLong()
 
         playbackJob = managerScope.launch {
-            var elapsedMs = (_playbackProgress.value * totalDurationMs).toLong()
-            val stepMs = 50L
-            while (_isPlaying.value && elapsedMs < totalDurationMs) {
-                delay(stepMs)
-                elapsedMs += stepMs
-                val currentMs = mediaPlayer?.currentPosition?.toLong() ?: elapsedMs
-                val totalMs = mediaPlayer?.duration?.toLong()?.takeIf { it > 0 } ?: totalDurationMs
-                _playbackProgress.value = (currentMs.toFloat() / totalMs.toFloat()).coerceIn(0f, 1f)
+            while (_isPlaying.value && currentMs < totalMs) {
+                delay(50)
+                currentMs += 50
+                _playbackProgress.value = (currentMs.toFloat() / totalMs).coerceIn(0f, 1f)
             }
-            if (_isPlaying.value) {
-                stopPlayback()
-            }
+            stopPlayback()
         }
     }
 
@@ -266,27 +274,27 @@ class VoiceNoteManager @Inject constructor() {
         _playbackProgress.value = 0f
         playbackJob?.cancel()
         try {
-            mediaPlayer?.stop()
-            mediaPlayer?.release()
-        } catch (_: Exception) {}
-        mediaPlayer = null
+            mediaPlayer?.apply {
+                stop()
+                release()
+            }
+        } catch (e: Exception) {
+            // Ignore release errors
+        } finally {
+            mediaPlayer = null
+        }
     }
 
-    private fun sampleWaveform(input: List<Int>, targetCount: Int): List<Int> {
-        if (input.isEmpty()) {
-            return List(targetCount) { Random.nextInt(25, 80) }
-        }
-        if (input.size <= targetCount) {
-            val result = input.toMutableList()
-            while (result.size < targetCount) {
-                result.add(result.lastOrNull() ?: 35)
+    fun seekTo(messageId: String, fraction: Float, durationSec: Int) {
+        if (_playingMessageId.value == messageId) {
+            _playbackProgress.value = fraction.coerceIn(0f, 1f)
+            val totalMs = if (durationSec > 0) durationSec * 1000 else 5000
+            val seekMs = (fraction * totalMs).toInt()
+            try {
+                mediaPlayer?.seekTo(seekMs)
+            } catch (e: Exception) {
+                Log.w(TAG, "Seek error: ${e.message}")
             }
-            return result
-        }
-        val step = input.size.toFloat() / targetCount.toFloat()
-        return (0 until targetCount).map { i ->
-            val idx = (i * step).toInt().coerceIn(0, input.size - 1)
-            input[idx]
         }
     }
 

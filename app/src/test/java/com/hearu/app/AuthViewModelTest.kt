@@ -35,6 +35,8 @@ class AuthViewModelTest {
         Dispatchers.setMain(testDispatcher)
         whenever(authRepository.currentUser).thenReturn(null)
         whenever(rolePreferences.activeRoleFlow).thenReturn(flowOf(null))
+        whenever(rolePreferences.onboardingCompletedFlow).thenReturn(flowOf(false))
+        whenever(rolePreferences.isOnboardingCompletedFlow).thenReturn(flowOf(false))
         viewModel = AuthViewModel(authRepository, rolePreferences)
     }
 
@@ -50,13 +52,12 @@ class AuthViewModelTest {
 
     @Test
     fun `login transitions through Loading to Authenticated on valid credentials`() = runTest(testDispatcher) {
-        runTest(testDispatcher) {
-            whenever(authRepository.signInWithEmail(any(), any())).thenReturn(Result.success(mockUser))
-        }
+        whenever(authRepository.signInWithEmail(any(), any())).thenReturn(Result.success(mockUser))
 
         viewModel.authState.test {
             assertEquals(AuthState.Idle, awaitItem())
             viewModel.login("test@hearu.app", "Password123!")
+            testDispatcher.scheduler.runCurrent()
             assertEquals(AuthState.Loading, awaitItem())
             testDispatcher.scheduler.advanceUntilIdle()
             assertEquals(AuthState.Authenticated, awaitItem())

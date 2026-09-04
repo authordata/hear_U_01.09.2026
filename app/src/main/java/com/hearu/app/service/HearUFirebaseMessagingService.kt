@@ -59,71 +59,64 @@ class HearUFirebaseMessagingService : FirebaseMessagingService() {
         super.onMessageReceived(remoteMessage)
         Log.d(TAG, "FCM Message received from: ${remoteMessage.from}")
 
-        // Ensure channels are created
-        createNotificationChannels(this)
-
         val data = remoteMessage.data
-        val notification = remoteMessage.notification
+        val notificationType = data[HearUNotificationConfig.EXTRA_NOTIFICATION_TYPE] ?: HearUNotificationConfig.TYPE_CHAT_MESSAGE
+        val sessionId = data[HearUNotificationConfig.EXTRA_SESSION_ID] ?: ""
+        val senderId = data[HearUNotificationConfig.EXTRA_USER_ID] ?: ""
 
-        val type = data["type"] ?: "general"
-        val sessionId = data["sessionId"] ?: ""
-        val userId = data["userId"] ?: ""
-        val senderName = data["senderName"] ?: "A Peer"
-
-        val title = notification?.title
+        val title = remoteMessage.notification?.title
             ?: data["title"]
-            ?: when (type) {
-                TYPE_SESSION_REQUEST -> "New Listening Request"
-                TYPE_CHAT_MESSAGE -> "New Message from $senderName"
-                TYPE_CRISIS_ALERT -> "Emergency Crisis Alert"
-                TYPE_SESSION_ENDED -> "Session Concluded"
-                else -> "HearU Notification"
+            ?: when (notificationType) {
+                HearUNotificationConfig.TYPE_SESSION_REQUEST -> "New Listener Request 🫂"
+                HearUNotificationConfig.TYPE_CRISIS_ALERT -> "Urgent Safety Alert 🚨"
+                HearUNotificationConfig.TYPE_SESSION_ENDED -> "Session Concluded"
+                else -> "New Message on HearU"
             }
 
-        val body = notification?.body
+        val body = remoteMessage.notification?.body
             ?: data["body"]
-            ?: data["messageText"]
-            ?: when (type) {
-                TYPE_SESSION_REQUEST -> "Someone is seeking empathetic support right now."
-                TYPE_CHAT_MESSAGE -> "You have received a new compassionate response."
-                TYPE_CRISIS_ALERT -> "A peer requires urgent support. Safety resources are available."
-                TYPE_SESSION_ENDED -> "Your conversation has concluded. Please take a moment to reflect."
-                else -> "You have a new update from HearU."
+            ?: when (notificationType) {
+                HearUNotificationConfig.TYPE_SESSION_REQUEST -> "Someone is seeking a compassionate listener. Tap to connect."
+                HearUNotificationConfig.TYPE_CRISIS_ALERT -> "Crisis protocols activated. Tap for 24/7 Lifeline support."
+                HearUNotificationConfig.TYPE_SESSION_ENDED -> "Your peer support session has completed."
+                else -> "You have received an anonymous message."
             }
 
-        showNotification(
-            type = type,
-            title = title,
-            body = body,
-            sessionId = sessionId,
-            userId = userId
-        )
+        showNotification(title, body, notificationType, sessionId, senderId)
     }
 
     private fun showNotification(
-        type: String,
         title: String,
         body: String,
+        type: String,
         sessionId: String,
-        userId: String
+        senderId: String
     ) {
         val channelId = when (type) {
-            TYPE_SESSION_REQUEST -> CHANNEL_SESSION_REQUESTS
-            TYPE_CRISIS_ALERT -> CHANNEL_SAFETY_ALERTS
-            else -> CHANNEL_CHAT_MESSAGES
+            HearUNotificationConfig.TYPE_SESSION_REQUEST -> HearUNotificationConfig.CHANNEL_SESSION_REQUESTS
+            HearUNotificationConfig.TYPE_CRISIS_ALERT -> HearUNotificationConfig.CHANNEL_SAFETY_ALERTS
+            else -> HearUNotificationConfig.CHANNEL_CHAT_MESSAGES
+        }
+
+        val notificationId = when (type) {
+            HearUNotificationConfig.TYPE_CRISIS_ALERT -> 9999
+            HearUNotificationConfig.TYPE_SESSION_REQUEST -> 1001
+            else -> sessionId.hashCode()
         }
 
         val intent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(EXTRA_NOTIFICATION_TYPE, type)
-            putExtra(EXTRA_SESSION_ID, sessionId)
-            putExtra(EXTRA_USER_ID, userId)
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(HearUNotificationConfig.EXTRA_NOTIFICATION_TYPE, type)
+            putExtra(HearUNotificationConfig.EXTRA_SESSION_ID, sessionId)
+            putExtra(HearUNotificationConfig.EXTRA_USER_ID, senderId)
         }
 
-        val pendingIntentFlags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-
-        val notificationId = (System.currentTimeMillis() % 100000).toInt()
-        val pendingIntent = PendingIntent.getActivity(this, notificationId, intent, pendingIntentFlags)
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            notificationId,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
 
         val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
@@ -136,11 +129,11 @@ class HearUFirebaseMessagingService : FirebaseMessagingService() {
             .setSound(defaultSoundUri)
             .setContentIntent(pendingIntent)
             .setPriority(
-                if (type == TYPE_CRISIS_ALERT) NotificationCompat.PRIORITY_MAX
+                if (type == HearUNotificationConfig.TYPE_CRISIS_ALERT) NotificationCompat.PRIORITY_MAX
                 else NotificationCompat.PRIORITY_HIGH
             )
 
-        if (type == TYPE_CRISIS_ALERT) {
+        if (type == HearUNotificationConfig.TYPE_CRISIS_ALERT) {
             notificationBuilder.setVibrate(longArrayOf(0, 500, 200, 500))
             notificationBuilder.setLights(Color.RED, 1000, 1000)
         }
@@ -152,18 +145,18 @@ class HearUFirebaseMessagingService : FirebaseMessagingService() {
     companion object {
         private const val TAG = "HearUMessagingService"
 
-        const val CHANNEL_CHAT_MESSAGES = "hearu_chat_messages"
-        const val CHANNEL_SESSION_REQUESTS = "hearu_session_requests"
-        const val CHANNEL_SAFETY_ALERTS = "hearu_safety_alerts"
+        const val CHANNEL_CHAT_MESSAGES = HearUNotificationConfig.CHANNEL_CHAT_MESSAGES
+        const val CHANNEL_SESSION_REQUESTS = HearUNotificationConfig.CHANNEL_SESSION_REQUESTS
+        const val CHANNEL_SAFETY_ALERTS = HearUNotificationConfig.CHANNEL_SAFETY_ALERTS
 
-        const val TYPE_CHAT_MESSAGE = "chat_message"
-        const val TYPE_SESSION_REQUEST = "session_request"
-        const val TYPE_CRISIS_ALERT = "crisis_alert"
-        const val TYPE_SESSION_ENDED = "session_ended"
+        const val TYPE_CHAT_MESSAGE = HearUNotificationConfig.TYPE_CHAT_MESSAGE
+        const val TYPE_SESSION_REQUEST = HearUNotificationConfig.TYPE_SESSION_REQUEST
+        const val TYPE_CRISIS_ALERT = HearUNotificationConfig.TYPE_CRISIS_ALERT
+        const val TYPE_SESSION_ENDED = HearUNotificationConfig.TYPE_SESSION_ENDED
 
-        const val EXTRA_NOTIFICATION_TYPE = "extra_notification_type"
-        const val EXTRA_SESSION_ID = "extra_session_id"
-        const val EXTRA_USER_ID = "extra_user_id"
+        const val EXTRA_NOTIFICATION_TYPE = HearUNotificationConfig.EXTRA_NOTIFICATION_TYPE
+        const val EXTRA_SESSION_ID = HearUNotificationConfig.EXTRA_SESSION_ID
+        const val EXTRA_USER_ID = HearUNotificationConfig.EXTRA_USER_ID
 
         fun createNotificationChannels(context: Context) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
