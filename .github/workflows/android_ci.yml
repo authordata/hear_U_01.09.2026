@@ -35,22 +35,8 @@ jobs:
 
       - name: Run Unit Tests
         run: |
-          ./gradlew testDebugUnitTest --stacktrace --no-daemon > test_run.log 2>&1 || {
-            echo "::error::Unit test execution failed!"
-            grep -A 25 "\* What went wrong:" test_run.log | while IFS= read -r line; do
-              echo "::error::$line"
-            done
-            grep -B 2 -A 5 "e: " test_run.log | while IFS= read -r line; do
-              echo "::error::$line"
-            done
-            grep -B 1 -A 5 "FAILURE:" test_run.log | while IFS= read -r line; do
-              echo "::error::$line"
-            done
-            tail -n 60 test_run.log | while IFS= read -r line; do
-              echo "::error::LOG: $line"
-            done
-            exit 1
-          }
+          set -o pipefail
+          ./gradlew testDebugUnitTest --stacktrace --no-daemon 2>&1 | tee test_run.log
 
       - name: Upload Test Results Artifact
         if: always()
@@ -61,22 +47,8 @@ jobs:
 
       - name: Assemble Debug APK
         run: |
-          ./gradlew assembleDebug --stacktrace --no-daemon > assemble_run.log 2>&1 || {
-            echo "::error::Assemble Debug APK failed!"
-            grep -A 25 "\* What went wrong:" assemble_run.log | while IFS= read -r line; do
-              echo "::error::$line"
-            done
-            grep -B 2 -A 5 "e: " assemble_run.log | while IFS= read -r line; do
-              echo "::error::$line"
-            done
-            grep -B 1 -A 5 "FAILURE:" assemble_run.log | while IFS= read -r line; do
-              echo "::error::$line"
-            done
-            tail -n 60 assemble_run.log | while IFS= read -r line; do
-              echo "::error::LOG: $line"
-            done
-            exit 1
-          }
+          set -o pipefail
+          ./gradlew assembleDebug --stacktrace --no-daemon 2>&1 | tee assemble_run.log
 
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
