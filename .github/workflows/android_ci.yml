@@ -6,10 +6,6 @@ on:
   pull_request:
     branches: [ "main" ]
 
-permissions:
-  contents: write
-  issues: write
-
 jobs:
   build:
     name: Build & Test HearU
@@ -38,13 +34,21 @@ jobs:
           chmod +x gradlew
 
       - name: Run Unit Tests
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ./gradlew testDebugUnitTest --stacktrace --no-daemon 2>&1 | tee test_run.log || {
+          ./gradlew testDebugUnitTest --stacktrace --no-daemon > test_run.log 2>&1 || {
             echo "::error::Unit test execution failed!"
-            tail -n 200 test_run.log > failure_snippet.txt
-            gh issue create --repo authordata/hear_U_01.09.2026 --title "CI Build Failure Diagnostics" --body-file failure_snippet.txt || true
+            grep -A 25 "\* What went wrong:" test_run.log | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+            grep -B 2 -A 5 "e: " test_run.log | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+            grep -B 1 -A 5 "FAILURE:" test_run.log | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+            tail -n 60 test_run.log | while IFS= read -r line; do
+              echo "::error::LOG: $line"
+            done
             exit 1
           }
 
@@ -57,7 +61,7 @@ jobs:
 
       - name: Assemble Debug APK
         run: |
-          ./gradlew assembleDebug --stacktrace --no-daemon 2>&1 | tee assemble_run.log || {
+          ./gradlew assembleDebug --stacktrace --no-daemon > assemble_run.log 2>&1 || {
             echo "::error::Assemble Debug APK failed!"
             grep -A 25 "\* What went wrong:" assemble_run.log | while IFS= read -r line; do
               echo "::error::$line"
@@ -68,10 +72,7 @@ jobs:
             grep -B 1 -A 5 "FAILURE:" assemble_run.log | while IFS= read -r line; do
               echo "::error::$line"
             done
-            grep -E "FAILED|EXCEPTION" assemble_run.log | while IFS= read -r line; do
-              echo "::error::$line"
-            done
-            tail -n 50 assemble_run.log | while IFS= read -r line; do
+            tail -n 60 assemble_run.log | while IFS= read -r line; do
               echo "::error::LOG: $line"
             done
             exit 1
