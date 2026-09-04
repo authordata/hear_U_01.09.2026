@@ -59,12 +59,13 @@ class ChatViewModel @Inject constructor(
             _errorState.value = "Session expired. Please log in again."
             return
         }
+
         viewModelScope.launch {
             _isSending.value = true
             try {
                 val msg = Message(
                     senderId = sender,
-                    text = text,
+                    text = text.trim(),
                     timestamp = System.currentTimeMillis(),
                     messageType = Message.TYPE_TEXT
                 )
@@ -123,10 +124,14 @@ class ChatViewModel @Inject constructor(
         )
     }
 
+    fun sendVoiceNote(duration: Int = 0) {
+        stopAndSendVoiceRecording()
+    }
+
     fun seekVoicePlayback(message: Message, fraction: Float) {
         voiceNoteManager.seekTo(
             messageId = message.id,
-            fraction = fraction,
+            progress = fraction,
             durationSec = message.audioDurationSec.takeIf { it > 0 } ?: message.voiceDurationSeconds
         )
     }
