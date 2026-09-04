@@ -56,7 +56,26 @@ jobs:
           path: app/build/test-results/testDebugUnitTest/
 
       - name: Assemble Debug APK
-        run: ./gradlew assembleDebug --stacktrace --no-daemon
+        run: |
+          ./gradlew assembleDebug --stacktrace --no-daemon 2>&1 | tee assemble_run.log || {
+            echo "::error::Assemble Debug APK failed!"
+            grep -A 25 "\* What went wrong:" assemble_run.log | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+            grep -B 2 -A 5 "e: " assemble_run.log | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+            grep -B 1 -A 5 "FAILURE:" assemble_run.log | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+            grep -E "FAILED|EXCEPTION" assemble_run.log | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+            tail -n 50 assemble_run.log | while IFS= read -r line; do
+              echo "::error::LOG: $line"
+            done
+            exit 1
+          }
 
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
