@@ -3,10 +3,16 @@
     <string name="app_name">HearU</string>
     <string name="tagline">You are never alone. A safe space to be heard.</string>
     <string name="welcome_title">Welcome to HearU</string>
-    <string name="login_btn">Sign In</string>
+    <string name="login_btn">Login</string>
     <string name="register_btn">Create Account</string>
+    <string name="sign_in_tab">Sign In</string>
+    <string name="sign_up_tab">Sign Up</string>
     <string name="email_label">Email Address</string>
     <string name="password_label">Password</string>
+    <string name="confirm_password_label">Confirm Password</string>
+    <string name="passwords_mismatch">Passwords do not match</string>
+    <string name="dont_have_account">Don\'t have an account? Sign Up</string>
+    <string name="already_have_account">Already have an account? Log In</string>
     <string name="seeker_title">I need support</string>
     <string name="seeker_desc">Connect with an empathetic listener or chat with AI companion</string>
     <string name="giver_title">I want to listen</string>
