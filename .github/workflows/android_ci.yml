@@ -34,28 +34,7 @@ jobs:
           chmod +x gradlew
 
       - name: Run Unit Tests
-        run: |
-          ./gradlew testDebugUnitTest --stacktrace --no-daemon > test_run.log 2>&1 || {
-            echo "::error::Unit tests / compilation failed!"
-            grep -A 20 "\* What went wrong:" test_run.log | while IFS= read -r line; do
-              echo "::error::$line"
-            done
-            grep -B 1 -A 4 "e: " test_run.log | while IFS= read -r line; do
-              echo "::error::$line"
-            done
-            for f in $(find app/build/test-results -name "*.xml"); do
-              echo "=== $f ==="
-              cat "$f"
-            done
-            exit 1
-          }
-
-      - name: Upload Test Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: hearu-unit-test-reports
-          path: app/build/reports/tests/testDebugUnitTest/
+        run: ./gradlew testDebugUnitTest --stacktrace --no-daemon
 
       - name: Assemble Debug APK
         run: ./gradlew assembleDebug --stacktrace --no-daemon
