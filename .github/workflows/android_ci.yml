@@ -35,8 +35,16 @@ jobs:
 
       - name: Run Unit Tests
         run: |
-          set -o pipefail
-          ./gradlew testDebugUnitTest --stacktrace --no-daemon 2>&1 | tee test_run.log
+          ./gradlew testDebugUnitTest --stacktrace --no-daemon > test_run.log 2>&1 || {
+            echo "::error title=UnitTestFailure::Unit test compilation or execution failed!"
+            grep -B 2 -A 5 -E "(e: |FAILURE:|FAILED|\.kt:[0-9]+:|\* What went wrong:)" test_run.log | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+            tail -n 80 test_run.log | while IFS= read -r line; do
+              echo "::error::LOG: $line"
+            done
+            exit 1
+          }
 
       - name: Upload Test Results Artifact
         if: always()
@@ -47,8 +55,16 @@ jobs:
 
       - name: Assemble Debug APK
         run: |
-          set -o pipefail
-          ./gradlew assembleDebug --stacktrace --no-daemon 2>&1 | tee assemble_run.log
+          ./gradlew assembleDebug --stacktrace --no-daemon > assemble_run.log 2>&1 || {
+            echo "::error title=AssembleDebugFailure::Assemble debug APK failed!"
+            grep -B 2 -A 5 -E "(e: |FAILURE:|FAILED|\.kt:[0-9]+:|\* What went wrong:)" assemble_run.log | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+            tail -n 80 assemble_run.log | while IFS= read -r line; do
+              echo "::error::LOG: $line"
+            done
+            exit 1
+          }
 
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4

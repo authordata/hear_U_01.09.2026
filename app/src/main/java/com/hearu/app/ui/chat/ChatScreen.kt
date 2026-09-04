@@ -1,37 +1,30 @@
 package com.hearu.app.ui.chat
 
-import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Emergency
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Send
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -64,11 +57,9 @@ fun ChatScreen(
     var showMenu by rememberSaveable { mutableStateOf(false) }
     var showReportDialog by rememberSaveable { mutableStateOf(false) }
     var showCrisisDialog by rememberSaveable { mutableStateOf(false) }
-    var showPhotoRevealDialog by rememberSaveable { mutableStateOf(false) }
-    var isPhotoUnblurred by rememberSaveable { mutableStateOf(false) }
-    var showEndSessionSheet by rememberSaveable { mutableStateOf(false) }
+    var showQuickSupportBanner by rememberSaveable { mutableStateOf(true) }
 
-    // Voice recording state
+    // Audio Voice Note Recording State
     var isRecording by remember { mutableStateOf(false) }
     var recordingDuration by remember { mutableStateOf(0) }
 
@@ -86,78 +77,26 @@ fun ChatScreen(
         viewModel.joinSession(sessionId, userId)
     }
 
+    val listState = rememberLazyListState()
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.size - 1)
+        }
+    }
+
     if (showReportDialog) {
         ReportUserDialog(
             onDismiss = { showReportDialog = false },
-            onSubmitReport = { _, _ ->
+            onSubmitReport = { reason, details ->
                 showReportDialog = false
-                Toast.makeText(context, "Report submitted for moderation. Thank you for keeping HearU safe.", Toast.LENGTH_LONG).show()
             }
         )
     }
 
     if (showCrisisDialog) {
-        CrisisSupportDialog(onDismiss = { showCrisisDialog = false })
-    }
-
-    if (showPhotoRevealDialog) {
-        AlertDialog(
-            onDismissRequest = { showPhotoRevealDialog = false },
-            title = { Text("Mutual Identity Reveal") },
-            text = {
-                Text("Both you and your peer must agree to reveal profile photos. Your name and private info remain strictly confidential. Do you wish to request mutual reveal?")
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        isPhotoUnblurred = true
-                        showPhotoRevealDialog = false
-                        Toast.makeText(context, "Mutual reveal enabled for this session.", Toast.LENGTH_SHORT).show()
-                    }
-                ) {
-                    Text("Reveal Photo")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showPhotoRevealDialog = false }) {
-                    Text("Keep Blurred")
-                }
-            }
+        CrisisSupportDialog(
+            onDismiss = { showCrisisDialog = false }
         )
-    }
-
-    if (showEndSessionSheet) {
-        ModalBottomSheet(onDismissRequest = { showEndSessionSheet = false }) {
-            Column(
-                modifier = Modifier.padding(24.dp).fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text("Session Completed", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("How was your conversation? Your rating helps maintain our empathetic community.", textAlign = TextAlign.Center)
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    repeat(5) {
-                        Icon(
-                            imageVector = Icons.Default.Star,
-                            contentDescription = "Star",
-                            tint = MaterialTheme.colorScheme.tertiary,
-                            modifier = Modifier.size(36.dp)
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(24.dp))
-                Button(
-                    onClick = {
-                        showEndSessionSheet = false
-                        onNavigateBack()
-                    },
-                    modifier = Modifier.fillMaxWidth().height(48.dp)
-                ) {
-                    Text("Submit & Return to Dashboard")
-                }
-            }
-        }
     }
 
     Scaffold(
@@ -167,19 +106,19 @@ fun ChatScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier
-                                .size(36.dp)
+                                .size(10.dp)
                                 .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primaryContainer)
-                                .then(if (!isPhotoUnblurred) Modifier.blur(8.dp) else Modifier),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
+                                .background(Color(0xFF4CAF50))
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
                         Column {
-                            Text("Peer Listener", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             Text(
-                                if (isPhotoUnblurred) "Mutual Reveal Active" else "Encrypted & Blurred",
+                                text = "Empathetic Listener",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "End-to-end ephemeral peer chat",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -192,17 +131,15 @@ fun ChatScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showPhotoRevealDialog = true }) {
+                    IconButton(onClick = {
+                        showCrisisDialog = true
+                        onNavigateToCrisis()
+                    }) {
                         Icon(
-                            if (isPhotoUnblurred) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                            contentDescription = "Toggle photo reveal"
+                            Icons.Default.Emergency,
+                            contentDescription = "Crisis SOS",
+                            tint = MaterialTheme.colorScheme.error
                         )
-                    }
-                    IconButton(
-                        onClick = { showCrisisDialog = true },
-                        modifier = Modifier.semantics { contentDescription = "Emergency SOS crisis support" }
-                    ) {
-                        Text("SOS", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                     }
                     IconButton(onClick = { showMenu = !showMenu }) {
                         Icon(Icons.Default.MoreVert, contentDescription = "Options")
@@ -212,44 +149,53 @@ fun ChatScreen(
                         onDismissRequest = { showMenu = false }
                     ) {
                         DropdownMenuItem(
-                            text = { Text("End Session & Rate") },
+                            text = { Text("Crisis Resources (988)") },
                             onClick = {
                                 showMenu = false
-                                showEndSessionSheet = true
+                                showCrisisDialog = true
+                                onNavigateToCrisis()
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.Emergency, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Report User") },
+                            text = { Text("Report User / Safety") },
                             onClick = {
                                 showMenu = false
                                 showReportDialog = true
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Block & Leave", color = MaterialTheme.colorScheme.error) },
-                            onClick = {
-                                showMenu = false
-                                Toast.makeText(context, "User blocked. Leaving session.", Toast.LENGTH_SHORT).show()
-                                onNavigateBack()
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.Flag, contentDescription = null)
                             }
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
                 )
             )
         },
         bottomBar = {
-            Column(modifier = Modifier.padding(8.dp).fillMaxWidth()) {
-                // Quick Empathy Reaction Row
-                if (!isRecording) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        val reactions = listOf("❤️", "🫂", "🙏", "🌸", "✨")
-                        reactions.forEach { emoji ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .imePadding()
+                    .navigationBarsPadding()
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(8.dp)
+            ) {
+                // Quick Empathy Suggestion Reactions
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val reactions = listOf("❤️", "🫂", "🙏", "🌸", "✨")
+                    reactions.forEach { emoji ->
+                        item {
                             AssistChip(
                                 onClick = { viewModel.sendMessage(emoji) },
                                 label = { Text(emoji) }
@@ -263,15 +209,18 @@ fun ChatScreen(
                     VoiceRecordBar(
                         isRecording = isRecording,
                         recordingDurationSec = recordingDuration,
-                        onStartRecording = { isRecording = true },
-                        onStopRecording = {
-                            val duration = recordingDuration
-                            isRecording = false
-                            if (duration > 0) {
-                                viewModel.sendVoiceNote(duration)
-                            }
+                        onStartRecording = {
+                            isRecording = true
+                            viewModel.startVoiceRecording(context, context.cacheDir)
                         },
-                        onCancelRecording = { isRecording = false }
+                        onStopRecording = {
+                            isRecording = false
+                            viewModel.stopAndSendVoiceRecording()
+                        },
+                        onCancelRecording = {
+                            isRecording = false
+                            viewModel.cancelVoiceRecording()
+                        }
                     )
                 } else {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -285,7 +234,10 @@ fun ChatScreen(
                         Spacer(modifier = Modifier.width(6.dp))
                         if (inputText.isBlank()) {
                             IconButton(
-                                onClick = { isRecording = true },
+                                onClick = {
+                                    isRecording = true
+                                    viewModel.startVoiceRecording(context, context.cacheDir)
+                                },
                                 colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
                             ) {
                                 Icon(Icons.Default.Mic, contentDescription = "Record Voice Note", tint = MaterialTheme.colorScheme.onSecondaryContainer)
@@ -318,25 +270,29 @@ fun ChatScreen(
                     Icon(Icons.Default.Favorite, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp))
                     Spacer(modifier = Modifier.height(12.dp))
                     Text("Your Safe Space is Connected", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        "Say hello or record a short voice note. Take your time, there is no rush.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
+                        "Messages are ephemeral and automatically wiped every 30 days. Speak freely with empathy and respect.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
         } else {
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .padding(horizontal = 16.dp),
-                reverseLayout = true
+                    .padding(horizontal = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(vertical = 8.dp)
             ) {
-                items(messages.reversed(), key = { it.id }) { msg ->
-                    val isMine = msg.senderId == userId
-                    MessageBubble(message = msg, isMine = isMine)
+                items(messages, key = { it.id }) { message ->
+                    ChatMessageItem(
+                        message = message,
+                        isMine = message.senderId == userId
+                    )
                 }
             }
         }
@@ -344,9 +300,14 @@ fun ChatScreen(
 }
 
 @Composable
-private fun MessageBubble(message: Message, isMine: Boolean) {
-    val timeFormat = remember { SimpleDateFormat("hh:mm a", Locale.getDefault()) }
-    val formattedTime = remember(message.timestamp) { timeFormat.format(Date(message.timestamp)) }
+fun ChatMessageItem(
+    message: Message,
+    isMine: Boolean
+) {
+    val formattedTime = remember(message.timestamp) {
+        val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
+        sdf.format(Date(message.timestamp))
+    }
 
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
