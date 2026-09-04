@@ -22,4 +22,13 @@ class UserRepository @Inject constructor(
     suspend fun updateUserStatus(uid: String, status: String) {
         firestore.collection("users").document(uid).update("status", status).await()
     }
+
+    suspend fun updateFcmToken(uid: String, token: String) {
+        firestore.collection("users").document(uid).update(
+            mapOf(
+                "fcmToken" to token,
+                "tokenUpdatedAt" to System.currentTimeMillis()
+            )
+        ).await()
+    }
 }

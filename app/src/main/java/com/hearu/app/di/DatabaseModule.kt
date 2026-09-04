@@ -22,11 +22,10 @@ object DatabaseModule {
             context,
             AppDatabase::class.java,
             "hearu_local.db"
-        ).build()
+        ).fallbackToDestructiveMigration().build()
     }
 
     @Provides
-    @Singleton
     fun provideMessageDao(database: AppDatabase): MessageDao {
         return database.messageDao()
     }
