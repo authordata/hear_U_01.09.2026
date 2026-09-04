@@ -4,11 +4,13 @@ import app.cash.turbine.test
 import com.google.firebase.auth.FirebaseUser
 import com.hearu.app.data.RolePreferences
 import com.hearu.app.repository.AuthRepository
+import com.hearu.app.repository.AuthResult
 import com.hearu.app.ui.auth.AuthState
 import com.hearu.app.ui.auth.AuthViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -52,7 +54,10 @@ class AuthViewModelTest {
 
     @Test
     fun `login transitions through Loading to Authenticated on valid credentials`() = runTest(testDispatcher) {
-        whenever(authRepository.signInWithEmail(any(), any())).thenReturn(Result.success(mockUser))
+        runBlocking {
+            whenever(authRepository.signInWithEmail(any<String>(), any<String>()))
+                .thenReturn(AuthResult.Success(mockUser))
+        }
 
         viewModel.authState.test {
             assertEquals(AuthState.Idle, awaitItem())

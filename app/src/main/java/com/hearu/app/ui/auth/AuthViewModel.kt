@@ -51,9 +51,10 @@ class AuthViewModel @Inject constructor(
         }
         viewModelScope.launch {
             _authState.value = AuthState.Loading
-            authRepository.signInWithEmail(email, pass)
-                .onSuccess { _authState.value = AuthState.Authenticated }
-                .onFailure { _authState.value = AuthState.Error(it.localizedMessage ?: "Login failed.") }
+            when (val result = authRepository.signInWithEmail(email, pass)) {
+                is com.hearu.app.repository.AuthResult.Success -> _authState.value = AuthState.Authenticated
+                is com.hearu.app.repository.AuthResult.Failure -> _authState.value = AuthState.Error(result.exception.localizedMessage ?: "Login failed.")
+            }
         }
     }
 
@@ -74,9 +75,10 @@ class AuthViewModel @Inject constructor(
         }
         viewModelScope.launch {
             _authState.value = AuthState.Loading
-            authRepository.signUpWithEmail(email, pass)
-                .onSuccess { _authState.value = AuthState.Authenticated }
-                .onFailure { _authState.value = AuthState.Error(it.localizedMessage ?: "Registration failed.") }
+            when (val result = authRepository.signUpWithEmail(email, pass)) {
+                is com.hearu.app.repository.AuthResult.Success -> _authState.value = AuthState.Authenticated
+                is com.hearu.app.repository.AuthResult.Failure -> _authState.value = AuthState.Error(result.exception.localizedMessage ?: "Registration failed.")
+            }
         }
     }
 
