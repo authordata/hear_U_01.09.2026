@@ -1,12 +1,15 @@
-const functions = require("firebase-functions");
+const functions = require("firebase-functions/v1");
 const admin = require("firebase-admin");
 admin.initializeApp();
 
 const db = admin.firestore();
 const MAX_BATCH_SIZE = 400; // Safe under Firestore 500-op limit
+const EXPIRED_SESSION_PAGE_SIZE = 50;
+const GIVER_PAGE_SIZE = 50;
+const MAX_GIVER_PAGES = 10;
 
 /**
- * 1. Matching Algorithm — Authenticated, IDOR-safe, concurrent session guard
+ * 1. Matching Algorithm — Authenticated, IDOR-safe, block-aware, transactional double-match guard
  */
 exports.matchSeekerWithGiver = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
@@ -14,94 +17,274 @@ exports.matchSeekerWithGiver = functions.https.onCall(async (data, context) => {
     }
     const seekerId = context.auth.uid;
 
-    // Input validation
-    const tags = Array.isArray(data.tags) ? data.tags.filter(t => typeof t === 'string').slice(0, 10) : [];
+    // Input validation (safe against null/undefined payload)
+    const tags = Array.isArray(data?.tags)
+        ? data.tags.filter(t => typeof t === "string").slice(0, 10)
+        : [];
 
-    // Guard: check for existing active session
-    const existingSession = await db.collection("sessions")
+    // Load seeker profile (for block list)
+    const seekerSnap = await db.collection("users").doc(seekerId).get();
+    const seekerData = seekerSnap.exists ? seekerSnap.data() : {};
+    const seekerBlocked = new Set(Array.isArray(seekerData?.blockedUsers) ? seekerData.blockedUsers : []);
+
+    // Guard: check for existing active sessions (all of them, to detect stale/blocked ones)
+    const existingSessions = await db.collection("sessions")
         .where("seekerId", "==", seekerId)
         .where("status", "==", "active")
-        .limit(1)
         .get();
 
-    if (!existingSession.empty) {
-        const existing = existingSession.docs[0];
-        return { matchFound: true, sessionId: existing.id, resumed: true };
-    }
-
-    const giversSnapshot = await db.collection("users")
-        .where("role", "in", ["giver", "both"])
-        .where("status", "==", "online")
-        .limit(20)
-        .get();
-
-    if (giversSnapshot.empty) {
-        return { matchFound: false, message: "No listeners are currently online." };
-    }
-
-    let bestGiver = null;
-    let highestScore = -1;
-
-    giversSnapshot.forEach(doc => {
-        if (doc.id === seekerId) return;
-        const giver = doc.data();
-        const giverTags = giver.emotionTags || [];
-        const overlap = tags.filter(t => giverTags.includes(t)).length;
-        const score = (overlap * 35) + ((giver.rating || 5.0) * 10) + 20;
-        if (score > highestScore) {
-            highestScore = score;
-            bestGiver = { id: doc.id, displayName: giver.displayName };
+    let hasStaleExistingSession = false;
+    if (!existingSessions.empty) {
+        if (existingSessions.docs.length === 1) {
+            const existing = existingSessions.docs[0];
+            const existingData = existing.data() || {};
+            const giverId = existingData.giverId || "";
+            if (giverId && !seekerBlocked.has(giverId)) {
+                const giverSnap = await db.collection("users").doc(giverId).get();
+                const giverData = giverSnap.exists ? (giverSnap.data() || {}) : null;
+                const giverBlocked = Array.isArray(giverData?.blockedUsers) ? giverData.blockedUsers : [];
+                if (giverSnap.exists && !giverBlocked.includes(seekerId)) {
+                    const giverDisplayName = giverData.displayName || "Empathetic Listener";
+                    return {
+                        matchFound: true,
+                        sessionId: existing.id,
+                        giverId,
+                        giverDisplayName,
+                        resumed: true
+                    };
+                }
+            }
+            hasStaleExistingSession = true;
+        } else {
+            hasStaleExistingSession = true;
         }
+    }
+
+    const candidates = [];
+    let anyOnlineGiver = false;
+    let lastGiverDoc = null;
+
+    for (let page = 0; page < MAX_GIVER_PAGES; page++) {
+        let giversQuery = db.collection("users")
+            .where("role", "in", ["giver", "both"])
+            .where("status", "==", "online")
+            .limit(GIVER_PAGE_SIZE);
+        if (lastGiverDoc) {
+            giversQuery = giversQuery.startAfter(lastGiverDoc);
+        }
+
+        const giversSnapshot = await giversQuery.get();
+        if (giversSnapshot.empty) {
+            break;
+        }
+        anyOnlineGiver = true;
+
+        giversSnapshot.forEach(doc => {
+            if (doc.id === seekerId) return;
+            const giver = doc.data() || {};
+            const giverBlocked = Array.isArray(giver.blockedUsers) ? giver.blockedUsers : [];
+            if (seekerBlocked.has(doc.id) || giverBlocked.includes(seekerId)) return;
+
+            const giverTags = Array.isArray(giver.emotionTags) ? giver.emotionTags : [];
+            const overlap = tags.filter(t => giverTags.includes(t)).length;
+            const rating = typeof giver.rating === "number" && Number.isFinite(giver.rating) ? giver.rating : 5.0;
+            const score = (overlap * 35) + (rating * 10) + 20;
+            candidates.push({
+                id: doc.id,
+                displayName: giver.displayName || "Empathetic Listener",
+                score
+            });
+        });
+
+        if (giversSnapshot.docs.length < GIVER_PAGE_SIZE) {
+            break;
+        }
+        lastGiverDoc = giversSnapshot.docs[giversSnapshot.docs.length - 1];
+    }
+
+    let noMatchMessage = "No available listener found.";
+    if (!anyOnlineGiver) {
+        noMatchMessage = "No listeners are currently online.";
+    } else if (candidates.length === 0) {
+        noMatchMessage = "No suitable listener found.";
+    } else {
+        candidates.sort((a, b) => b.score - a.score);
+    }
+
+    if (candidates.length === 0 && !hasStaleExistingSession) {
+        return { matchFound: false, message: noMatchMessage };
+    }
+
+    const matchResult = await db.runTransaction(async (tx) => {
+        // Re-read seeker inside transaction for consistent block list
+        const txSeekerSnap = await tx.get(db.collection("users").doc(seekerId));
+        const txSeekerData = txSeekerSnap.exists ? txSeekerSnap.data() : {};
+        const txSeekerBlocked = new Set(Array.isArray(txSeekerData?.blockedUsers) ? txSeekerData.blockedUsers : []);
+
+        // Re-verify ALL active sessions for seeker inside transaction
+        const seekerActiveSnap = await tx.get(
+            db.collection("sessions")
+                .where("seekerId", "==", seekerId)
+                .where("status", "==", "active")
+        );
+
+        const staleSessionRefsToEnd = [];
+        let validActiveSession = null;
+
+        for (const existing of seekerActiveSnap.docs) {
+            const existingData = existing.data() || {};
+            const giverId = existingData.giverId || "";
+            if (!giverId || txSeekerBlocked.has(giverId)) {
+                staleSessionRefsToEnd.push(existing.ref);
+                continue;
+            }
+            const giverSnap = await tx.get(db.collection("users").doc(giverId));
+            const giverData = giverSnap.exists ? (giverSnap.data() || {}) : null;
+            const giverBlocked = Array.isArray(giverData?.blockedUsers) ? giverData.blockedUsers : [];
+            if (!giverSnap.exists || giverBlocked.includes(seekerId)) {
+                staleSessionRefsToEnd.push(existing.ref);
+                continue;
+            }
+            if (!validActiveSession) {
+                validActiveSession = {
+                    sessionId: existing.id,
+                    giverId,
+                    giverDisplayName: giverData.displayName || "Empathetic Listener"
+                };
+            } else {
+                staleSessionRefsToEnd.push(existing.ref);
+            }
+        }
+
+        if (validActiveSession) {
+            for (const staleRef of staleSessionRefsToEnd) {
+                tx.update(staleRef, { status: "ended" });
+            }
+            return {
+                matchFound: true,
+                sessionId: validActiveSession.sessionId,
+                giverId: validActiveSession.giverId,
+                giverDisplayName: validActiveSession.giverDisplayName,
+                resumed: true
+            };
+        }
+
+        let matchedCandidate = null;
+        for (const candidate of candidates) {
+            const candidateUserRef = db.collection("users").doc(candidate.id);
+            const candidateUserSnap = await tx.get(candidateUserRef);
+            if (!candidateUserSnap.exists) continue;
+            const candidateData = candidateUserSnap.data() || {};
+            if (candidateData.status !== "online") continue;
+            const candidateBlocked = Array.isArray(candidateData.blockedUsers) ? candidateData.blockedUsers : [];
+            if (txSeekerBlocked.has(candidate.id) || candidateBlocked.includes(seekerId)) continue;
+
+            const giverActiveSnap = await tx.get(
+                db.collection("sessions")
+                    .where("giverId", "==", candidate.id)
+                    .where("status", "==", "active")
+                    .limit(1)
+            );
+            if (!giverActiveSnap.empty) continue;
+
+            // Prevent double-booking "both" users who are currently active as seekers
+            const candidateActiveSeekerSnap = await tx.get(
+                db.collection("sessions")
+                    .where("seekerId", "==", candidate.id)
+                    .where("status", "==", "active")
+                    .limit(1)
+            );
+            if (!candidateActiveSeekerSnap.empty) continue;
+
+            matchedCandidate = {
+                id: candidate.id,
+                displayName: candidateData.displayName || candidate.displayName
+            };
+            break;
+        }
+
+        // All tx.get(...) reads are complete; perform transactional writes now
+        for (const staleRef of staleSessionRefsToEnd) {
+            tx.update(staleRef, { status: "ended" });
+        }
+
+        if (matchedCandidate) {
+            const sessionRef = db.collection("sessions").doc();
+            tx.set(sessionRef, {
+                seekerId,
+                giverId: matchedCandidate.id,
+                status: "active",
+                createdAt: admin.firestore.Timestamp.now(),
+                identityRevealed: false,
+                seekerConsent: false,
+                giverConsent: false
+            });
+
+            return {
+                matchFound: true,
+                sessionId: sessionRef.id,
+                giverId: matchedCandidate.id,
+                giverDisplayName: matchedCandidate.displayName,
+                resumed: false
+            };
+        }
+
+        return { matchFound: false, message: noMatchMessage };
     });
 
-    if (!bestGiver) return { matchFound: false, message: "No suitable listener found." };
-
-    const sessionRef = await db.collection("sessions").add({
-        seekerId,
-        giverId: bestGiver.id,
-        status: "active",
-        createdAt: admin.firestore.Timestamp.now(),
-        identityRevealed: false
-    });
-
-    return { matchFound: true, sessionId: sessionRef.id, giverDisplayName: bestGiver.displayName };
+    return matchResult;
 });
 
 /**
- * 2. 30-Day Auto-Delete — Chunked batch to stay under 500-op Firestore limit
+ * 2. 30-Day Auto-Delete — Paginated loop with chunked batches under 500-op Firestore limit
  */
 exports.purgeExpiredChats = functions.pubsub.schedule("every 24 hours").onRun(async () => {
     const thirtyDaysAgo = admin.firestore.Timestamp.fromMillis(
         Date.now() - (30 * 24 * 60 * 60 * 1000)
     );
 
-    const expiredSessions = await db.collection("sessions")
-        .where("createdAt", "<=", thirtyDaysAgo)
-        .limit(100)
-        .get();
+    let totalSessionsPurged = 0;
+    let totalDocsDeleted = 0;
 
-    if (expiredSessions.empty) {
+    while (true) {
+        const expiredSessions = await db.collection("sessions")
+            .where("createdAt", "<=", thirtyDaysAgo)
+            .limit(EXPIRED_SESSION_PAGE_SIZE)
+            .get();
+
+        if (expiredSessions.empty) {
+            break;
+        }
+
+        for (const sessionDoc of expiredSessions.docs) {
+            // Paginate message subcollection deletion to avoid unbounded memory usage
+            while (true) {
+                const msgSnap = await sessionDoc.ref
+                    .collection("messages")
+                    .limit(MAX_BATCH_SIZE)
+                    .get();
+
+                if (msgSnap.empty) {
+                    break;
+                }
+
+                const batch = db.batch();
+                msgSnap.docs.forEach(msg => batch.delete(msg.ref));
+                await batch.commit();
+                totalDocsDeleted += msgSnap.size;
+            }
+
+            await sessionDoc.ref.delete();
+            totalSessionsPurged += 1;
+            totalDocsDeleted += 1;
+        }
+    }
+
+    if (totalSessionsPurged === 0) {
         console.log("No expired sessions to purge.");
-        return null;
+    } else {
+        console.log(`Purged ${totalSessionsPurged} sessions (${totalDocsDeleted} total documents).`);
     }
-
-    // Collect all delete refs
-    const allRefs = [];
-    for (const sessionDoc of expiredSessions.docs) {
-        const messages = await sessionDoc.ref.collection("messages").get();
-        messages.forEach(msg => allRefs.push(msg.ref));
-        allRefs.push(sessionDoc.ref);
-    }
-
-    // Chunk into batches of MAX_BATCH_SIZE
-    for (let i = 0; i < allRefs.length; i += MAX_BATCH_SIZE) {
-        const chunk = allRefs.slice(i, i + MAX_BATCH_SIZE);
-        const batch = db.batch();
-        chunk.forEach(ref => batch.delete(ref));
-        await batch.commit();
-    }
-
-    console.log(`Purged ${expiredSessions.size} sessions (${allRefs.length} total documents).`);
     return null;
 });
 

@@ -1,15 +1,18 @@
 package com.hearu.app.service
 
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.media.RingtoneManager
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
@@ -17,10 +20,13 @@ import com.hearu.app.MainActivity
 import com.hearu.app.R
 import com.hearu.app.repository.UserRepository
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -32,22 +38,30 @@ class HearUFirebaseMessagingService : FirebaseMessagingService() {
     @Inject
     lateinit var auth: FirebaseAuth
 
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    internal var serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannels(this)
     }
 
+    override fun onDestroy() {
+        serviceScope.cancel()
+        super.onDestroy()
+    }
+
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        Log.d(TAG, "New FCM Token received: $token")
+        Log.d(TAG, "FCM registration token refreshed")
+        if (!::auth.isInitialized || !::userRepository.isInitialized) return
         val currentUid = auth.currentUser?.uid
         if (currentUid != null) {
             serviceScope.launch {
                 try {
                     userRepository.updateFcmToken(currentUid, token)
-                    Log.d(TAG, "Successfully synced FCM token for user: $currentUid")
+                    Log.d(TAG, "FCM token synced")
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to sync FCM token to Firestore: ${e.message}", e)
                 }
@@ -57,20 +71,23 @@ class HearUFirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
-        Log.d(TAG, "FCM Message received from: ${remoteMessage.from}")
+        Log.d(TAG, "FCM message received")
 
         val data = remoteMessage.data
         val notificationType = data[EXTRA_NOTIFICATION_TYPE] ?: TYPE_CHAT_MESSAGE
         val sessionId = data[EXTRA_SESSION_ID] ?: ""
         val senderId = data[EXTRA_USER_ID] ?: ""
 
-        val title = remoteMessage.notification?.title ?: when (notificationType) {
+        val title = remoteMessage.notification?.title?.takeIf { it.isNotBlank() } ?: when (notificationType) {
             TYPE_SESSION_REQUEST -> "New Listener Request"
             TYPE_CRISIS_ALERT -> "Emergency Alert"
+            TYPE_SESSION_ENDED -> "Session Ended"
             else -> "HearU Message"
         }
 
-        val body = remoteMessage.notification?.body ?: data["message"] ?: "You have a new update in HearU."
+        val body = remoteMessage.notification?.body?.takeIf { it.isNotBlank() }
+            ?: data["message"]?.takeIf { it.isNotBlank() }
+            ?: "You have a new update in HearU."
 
         sendNotification(
             title = title,
@@ -88,6 +105,15 @@ class HearUFirebaseMessagingService : FirebaseMessagingService() {
         sessionId: String,
         userId: String
     ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+
         val channelId = when (notificationType) {
             TYPE_SESSION_REQUEST -> CHANNEL_SESSION_REQUESTS
             TYPE_CRISIS_ALERT -> CHANNEL_SAFETY_ALERTS
@@ -103,7 +129,7 @@ class HearUFirebaseMessagingService : FirebaseMessagingService() {
 
         val pendingIntent = PendingIntent.getActivity(
             this,
-            System.currentTimeMillis().toInt(),
+            requestCodeGenerator.getAndIncrement(),
             intent,
             PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -111,12 +137,13 @@ class HearUFirebaseMessagingService : FirebaseMessagingService() {
         val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
         val notificationBuilder = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(body)
             .setAutoCancel(true)
             .setSound(defaultSoundUri)
             .setContentIntent(pendingIntent)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPriority(
                 if (notificationType == TYPE_CRISIS_ALERT) NotificationCompat.PRIORITY_MAX
                 else NotificationCompat.PRIORITY_HIGH
@@ -127,12 +154,15 @@ class HearUFirebaseMessagingService : FirebaseMessagingService() {
         }
 
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val notificationId = System.currentTimeMillis().toInt()
+        val notificationId = notificationIdGenerator.getAndIncrement()
         notificationManager.notify(notificationId, notificationBuilder.build())
     }
 
     companion object {
         private const val TAG = "HearUMessagingService"
+
+        private val notificationIdGenerator = AtomicInteger(1)
+        private val requestCodeGenerator = AtomicInteger(1)
 
         const val CHANNEL_CHAT_MESSAGES = HearUNotificationConfig.CHANNEL_CHAT_MESSAGES
         const val CHANNEL_SESSION_REQUESTS = HearUNotificationConfig.CHANNEL_SESSION_REQUESTS

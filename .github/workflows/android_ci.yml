@@ -71,3 +71,46 @@ jobs:
         with:
           name: hearu-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Run Release Lint
+        run: |
+          ./gradlew lintRelease --stacktrace --no-daemon > lint_run.log 2>&1 || {
+            echo "::error title=LintReleaseFailure::Release lint failed!"
+            grep -B 2 -A 5 -E "(Error:|FAILURE:|FAILED|\* What went wrong:)" lint_run.log | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+            tail -n 80 lint_run.log | while IFS= read -r line; do
+              echo "::error::LOG: $line"
+            done
+            exit 1
+          }
+
+      - name: Upload Release Lint Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-release-report
+          path: |
+            app/build/reports/lint-results-release.html
+            app/build/reports/lint-results-release.xml
+
+      - name: Assemble Release APK
+        run: |
+          ./gradlew assembleRelease --stacktrace --no-daemon > release_run.log 2>&1 || {
+            echo "::error title=AssembleReleaseFailure::Assemble release APK failed!"
+            grep -B 2 -A 5 -E "(e: |FAILURE:|FAILED|R8|\.kt:[0-9]+:|\* What went wrong:)" release_run.log | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+            tail -n 80 release_run.log | while IFS= read -r line; do
+              echo "::error::LOG: $line"
+            done
+            exit 1
+          }
+
+      - name: Upload Release APK & Mapping Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: hearu-release-artifacts
+          path: |
+            app/build/outputs/apk/release/
+            app/build/outputs/mapping/release/

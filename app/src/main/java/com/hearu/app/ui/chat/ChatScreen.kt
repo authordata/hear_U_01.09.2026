@@ -1,43 +1,98 @@
 package com.hearu.app.ui.chat
 
+import android.Manifest
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Emergency
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.hearu.app.R
 import com.hearu.app.model.Message
 import com.hearu.app.ui.chat.components.VoiceNoteBubble
 import com.hearu.app.ui.chat.components.VoiceRecordBar
 import com.hearu.app.ui.dialogs.CrisisSupportDialog
 import com.hearu.app.ui.dialogs.ReportUserDialog
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -53,35 +108,67 @@ fun ChatScreen(
     viewModel: ChatViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val isSending by viewModel.isSending.collectAsStateWithLifecycle()
     val errorState by viewModel.errorState.collectAsStateWithLifecycle()
     val isPhotoRevealed by viewModel.isPhotoRevealed.collectAsStateWithLifecycle()
     val myPhotoConsent by viewModel.myPhotoConsent.collectAsStateWithLifecycle()
+    val isRecording by viewModel.isRecording.collectAsStateWithLifecycle()
+    val recordingDuration by viewModel.recordingDuration.collectAsStateWithLifecycle()
+    val liveAmplitudes by viewModel.liveAmplitudes.collectAsStateWithLifecycle()
+    val playingMessageId by viewModel.playingMessageId.collectAsStateWithLifecycle()
+    val playbackProgress by viewModel.playbackProgress.collectAsStateWithLifecycle()
+    val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
+
+    val effectiveUserId = viewModel.currentUserId.orEmpty()
+    val resolvedPeerId = peerId.ifBlank { userId }.takeIf { it != effectiveUserId }.orEmpty()
 
     var inputText by rememberSaveable { mutableStateOf("") }
     var showMenu by rememberSaveable { mutableStateOf(false) }
     var showReportDialog by rememberSaveable { mutableStateOf(false) }
+    var showBlockDialog by rememberSaveable { mutableStateOf(false) }
     var showCrisisDialog by rememberSaveable { mutableStateOf(false) }
     var showPhotoConsentDialog by rememberSaveable { mutableStateOf(false) }
-    var showQuickSupportBanner by rememberSaveable { mutableStateOf(true) }
 
-    // Audio Voice Note Recording State
-    var isRecording by remember { mutableStateOf(false) }
-    var recordingDuration by remember { mutableStateOf(0) }
-
-    LaunchedEffect(isRecording) {
-        if (isRecording) {
-            recordingDuration = 0
-            while (isRecording) {
-                delay(1000L)
-                recordingDuration++
+    val audioPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            viewModel.startVoiceRecording(context, context.cacheDir)
+        } else {
+            coroutineScope.launch {
+                val action = snackbarHostState.showSnackbar(
+                    message = "Microphone permission is required to record voice notes.",
+                    actionLabel = "Settings",
+                    duration = SnackbarDuration.Long
+                )
+                if (action == SnackbarResult.ActionPerformed) {
+                    val settingsIntent = Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.fromParts("package", context.packageName, null)
+                    )
+                    try {
+                        context.startActivity(settingsIntent)
+                    } catch (_: ActivityNotFoundException) {
+                    }
+                }
             }
         }
     }
 
     LaunchedEffect(sessionId) {
         viewModel.joinSession(sessionId, userId)
+    }
+
+    LaunchedEffect(errorState) {
+        val currentError = errorState
+        if (!currentError.isNullOrBlank()) {
+            snackbarHostState.showSnackbar(currentError)
+            viewModel.clearError()
+        }
     }
 
     val listState = rememberLazyListState()
@@ -95,7 +182,41 @@ fun ChatScreen(
         ReportUserDialog(
             onDismiss = { showReportDialog = false },
             onSubmitReport = { reason, details ->
+                viewModel.submitReport(resolvedPeerId, reason, details)
                 showReportDialog = false
+            }
+        )
+    }
+
+    if (showBlockDialog) {
+        AlertDialog(
+            onDismissRequest = { showBlockDialog = false },
+            icon = {
+                Icon(Icons.Default.Block, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+            },
+            title = { Text("Block & Leave Session") },
+            text = {
+                Text(
+                    "Blocking this user will end your current session and prevent future matches with them."
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showBlockDialog = false
+                        viewModel.blockAndLeave(resolvedPeerId) {
+                            onNavigateBack()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text(stringResource(R.string.block_user))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBlockDialog = false }) {
+                    Text("Cancel")
+                }
             }
         )
     }
@@ -119,9 +240,9 @@ fun ChatScreen(
             title = { Text("Mutual Photo Reveal Consent") },
             text = {
                 Text(
-                    "HearU safeguards your privacy by cryptographically blurring profile photos by default.\n\n" +
-                    "To unblur avatars, both you and your peer must independently grant mutual consent. " +
-                    "Either person can revoke consent at any time to instantly re-blur."
+                    "HearU safeguards your privacy by visually blurring profile photos by default.\n\n" +
+                        "To unblur avatars, both you and your peer must independently grant mutual consent. " +
+                        "Either person can revoke consent at any time to instantly re-blur."
                 )
             },
             confirmButton = {
@@ -143,6 +264,7 @@ fun ChatScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -167,7 +289,7 @@ fun ChatScreen(
                                 modifier = Modifier
                                     .size(10.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0xFF4CAF50))
+                                    .background(MaterialTheme.colorScheme.secondary)
                             )
                         }
                         Spacer(modifier = Modifier.width(10.dp))
@@ -198,10 +320,7 @@ fun ChatScreen(
                             tint = if (isPhotoRevealed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    IconButton(onClick = {
-                        showCrisisDialog = true
-                        onNavigateToCrisis()
-                    }) {
+                    IconButton(onClick = onNavigateToCrisis) {
                         Icon(
                             Icons.Default.Emergency,
                             contentDescription = "Crisis SOS",
@@ -233,7 +352,6 @@ fun ChatScreen(
                             onClick = {
                                 showMenu = false
                                 showCrisisDialog = true
-                                onNavigateToCrisis()
                             },
                             leadingIcon = {
                                 Icon(Icons.Default.Emergency, contentDescription = null, tint = MaterialTheme.colorScheme.error)
@@ -247,6 +365,16 @@ fun ChatScreen(
                             },
                             leadingIcon = {
                                 Icon(Icons.Default.Flag, contentDescription = null)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.block_user), color = MaterialTheme.colorScheme.error) },
+                            onClick = {
+                                showMenu = false
+                                showBlockDialog = true
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.Block, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                             }
                         )
                     }
@@ -274,13 +402,11 @@ fun ChatScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     val reactions = listOf("❤️", "🫂", "🙏", "🌸", "✨")
-                    reactions.forEach { emoji ->
-                        item {
-                            AssistChip(
-                                onClick = { viewModel.sendMessage(emoji) },
-                                label = { Text(emoji) }
-                            )
-                        }
+                    items(reactions) { emoji ->
+                        AssistChip(
+                            onClick = { viewModel.sendMessage(emoji) },
+                            label = { Text(emoji) }
+                        )
                     }
                 }
 
@@ -289,16 +415,14 @@ fun ChatScreen(
                     VoiceRecordBar(
                         isRecording = isRecording,
                         recordingDurationSec = recordingDuration,
+                        liveAmplitudes = liveAmplitudes,
                         onStartRecording = {
-                            isRecording = true
                             viewModel.startVoiceRecording(context, context.cacheDir)
                         },
                         onStopRecording = {
-                            isRecording = false
                             viewModel.stopAndSendVoiceRecording()
                         },
                         onCancelRecording = {
-                            isRecording = false
                             viewModel.cancelVoiceRecording()
                         }
                     )
@@ -315,12 +439,23 @@ fun ChatScreen(
                         if (inputText.isBlank()) {
                             IconButton(
                                 onClick = {
-                                    isRecording = true
-                                    viewModel.startVoiceRecording(context, context.cacheDir)
+                                    val granted = ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.RECORD_AUDIO
+                                    ) == PackageManager.PERMISSION_GRANTED
+                                    if (granted) {
+                                        viewModel.startVoiceRecording(context, context.cacheDir)
+                                    } else {
+                                        audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                    }
                                 },
                                 colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
                             ) {
-                                Icon(Icons.Default.Mic, contentDescription = "Record Voice Note", tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                                Icon(
+                                    Icons.Default.Mic,
+                                    contentDescription = "Record Voice Note",
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
                             }
                         } else {
                             IconButton(
@@ -333,7 +468,11 @@ fun ChatScreen(
                                 enabled = !isSending,
                                 colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.primary)
                             ) {
-                                Icon(Icons.Default.Send, contentDescription = "Send", tint = MaterialTheme.colorScheme.onPrimary)
+                                Icon(
+                                    Icons.AutoMirrored.Filled.Send,
+                                    contentDescription = "Send",
+                                    tint = MaterialTheme.colorScheme.onPrimary
+                                )
                             }
                         }
                     }
@@ -343,22 +482,43 @@ fun ChatScreen(
     ) { paddingValues ->
         if (messages.isEmpty()) {
             Box(
-                modifier = Modifier.fillMaxSize().padding(paddingValues),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .verticalScroll(rememberScrollState()),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
-                    Icon(Icons.Default.Favorite, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp))
+                    Icon(
+                        Icons.Default.Favorite,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(48.dp)
+                    )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text("Your Safe Space is Connected", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         "Messages are ephemeral and automatically wiped every 30 days. Speak freely with empathy and respect.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
                     )
                 }
             }
         } else {
+            val keyedMessages = remember(messages) {
+                val seen = HashSet<String>(messages.size)
+                messages.mapIndexed { idx, msg ->
+                    val base = msg.id.ifBlank { "blank_${idx}_${msg.senderId}_${msg.timestamp}" }
+                    var candidate = base
+                    var suffix = idx
+                    while (!seen.add(candidate)) {
+                        candidate = "${base}_${suffix++}"
+                    }
+                    msg to candidate
+                }
+            }
             LazyColumn(
                 state = listState,
                 modifier = Modifier
@@ -368,10 +528,14 @@ fun ChatScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(vertical = 8.dp)
             ) {
-                items(messages, key = { it.id }) { message ->
+                items(keyedMessages, key = { it.second }) { (message, _) ->
                     ChatMessageItem(
                         message = message,
-                        isMine = message.senderId == userId
+                        isMine = effectiveUserId.isNotBlank() && message.senderId == effectiveUserId,
+                        isPlaying = isPlaying && playingMessageId == message.id,
+                        playbackProgress = if (playingMessageId == message.id) playbackProgress else 0f,
+                        onTogglePlay = { viewModel.toggleVoicePlayback(message) },
+                        onSeek = { fraction -> viewModel.seekVoicePlayback(message, fraction) }
                     )
                 }
             }
@@ -382,30 +546,67 @@ fun ChatScreen(
 @Composable
 fun ChatMessageItem(
     message: Message,
-    isMine: Boolean
+    isMine: Boolean,
+    isPlaying: Boolean = false,
+    playbackProgress: Float = 0f,
+    onTogglePlay: () -> Unit = {},
+    onSeek: (Float) -> Unit = {}
 ) {
+    if (message.isSystemMessage || message.messageType == Message.TYPE_SYSTEM) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant
+            ) {
+                Text(
+                    text = message.text,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                )
+            }
+        }
+        return
+    }
+
     val formattedTime = remember(message.timestamp) {
         val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
         sdf.format(Date(message.timestamp))
     }
 
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
         horizontalArrangement = if (isMine) Arrangement.End else Arrangement.Start
     ) {
         Column(
             horizontalAlignment = if (isMine) Alignment.End else Alignment.Start
         ) {
-            if (message.isVoiceNote) {
+            if (message.isVoiceNote || message.messageType == Message.TYPE_VOICE) {
+                val duration = (message.audioDurationSec.takeIf { it > 0 } ?: message.voiceDurationSeconds)
+                    .coerceAtLeast(1)
                 VoiceNoteBubble(
-                    durationSeconds = message.voiceDurationSeconds.coerceAtLeast(1),
-                    isMine = isMine
+                    durationSeconds = duration,
+                    isMine = isMine,
+                    isPlaying = isPlaying,
+                    playbackProgress = playbackProgress,
+                    waveformAmplitudes = message.waveformAmplitudes,
+                    onTogglePlay = onTogglePlay,
+                    onSeek = onSeek
                 )
             } else {
                 Surface(
                     shape = RoundedCornerShape(16.dp),
                     color = if (isMine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                    tonalElevation = 1.dp
+                    tonalElevation = 1.dp,
+                    modifier = Modifier.widthIn(max = 300.dp)
                 ) {
                     Text(
                         text = message.text,
@@ -418,7 +619,7 @@ fun ChatMessageItem(
             Text(
                 text = formattedTime,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.90f),
                 modifier = Modifier.padding(top = 2.dp, start = 4.dp, end = 4.dp)
             )
         }

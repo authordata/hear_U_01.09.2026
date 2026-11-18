@@ -3,11 +3,14 @@ package com.hearu.app
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.hearu.app.audio.VoiceNoteManager
+import com.hearu.app.model.ChatSession
 import com.hearu.app.model.Message
 import com.hearu.app.repository.ChatRepository
+import com.hearu.app.repository.ModerationRepository
 import com.hearu.app.ui.chat.ChatViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
@@ -17,10 +20,17 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import org.mockito.kotlin.*
+import org.mockito.kotlin.any
+import org.mockito.kotlin.check
+import org.mockito.kotlin.eq
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.verify
+import org.mockito.kotlin.whenever
 import java.io.File
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -30,6 +40,7 @@ class ChatViewModelTest {
     private val chatRepository: ChatRepository = mock()
     private val auth: FirebaseAuth = mock()
     private val voiceNoteManager: VoiceNoteManager = mock()
+    private val moderationRepository: ModerationRepository = mock()
     private val mockUser: FirebaseUser = mock()
     private lateinit var viewModel: ChatViewModel
 
@@ -47,9 +58,10 @@ class ChatViewModelTest {
 
         runBlocking {
             whenever(chatRepository.sendMessage(any<String>(), any<Message>())).thenReturn(Unit)
+            whenever(chatRepository.updatePhotoConsent(any(), any(), any())).thenReturn(false)
         }
 
-        viewModel = ChatViewModel(chatRepository, auth, voiceNoteManager)
+        viewModel = ChatViewModel(chatRepository, auth, voiceNoteManager, moderationRepository)
     }
 
     @After
@@ -58,8 +70,9 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun `initial messages list is empty`() = runTest(testDispatcher) {
+    fun `initial messages list is empty and currentUserId reflects FirebaseAuth`() = runTest(testDispatcher) {
         assertEquals(emptyList<Message>(), viewModel.messages.value)
+        assertEquals("test_user_456", viewModel.currentUserId)
     }
 
     @Test
@@ -150,5 +163,120 @@ class ChatViewModelTest {
         viewModel.seekVoicePlayback(voiceMsg, 0.5f)
 
         verify(voiceNoteManager).seekTo("msg_audio_1", 0.5f, 22)
+    }
+
+    @Test
+    fun `togglePhotoConsent delegates to chatRepository without faking mutual reveal`() = runTest(testDispatcher) {
+        val session = ChatSession(
+            sessionId = "session_123",
+            seekerId = "test_user_456",
+            giverId = "peer_1",
+            seekerConsent = false,
+            giverConsent = false,
+            identityRevealed = false
+        )
+        whenever(chatRepository.getMessages("session_123")).thenReturn(flowOf(emptyList()))
+        whenever(chatRepository.observeSession("session_123")).thenReturn(flowOf(session))
+        runBlocking {
+            whenever(chatRepository.updatePhotoConsent("session_123", true, true)).thenReturn(false)
+        }
+
+        viewModel.joinSession("session_123", "peer_1")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.togglePhotoConsent()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.myPhotoConsent.value)
+        assertFalse(viewModel.isPhotoRevealed.value)
+        verify(chatRepository).updatePhotoConsent("session_123", true, true)
+    }
+
+    @Test
+    fun `submitReport validates auth and calls moderationRepository`() = runTest(testDispatcher) {
+        whenever(chatRepository.getMessages("session_123")).thenReturn(flowOf(emptyList()))
+        viewModel.joinSession("session_123", "peer_99")
+
+        viewModel.submitReport("peer_99", "Spam / Scams", "Details")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(viewModel.errorState.value)
+        verify(moderationRepository).reportUser(
+            reporterId = "test_user_456",
+            reportedUserId = "peer_99",
+            sessionId = "session_123",
+            reason = "Spam / Scams",
+            description = "Details"
+        )
+
+        whenever(auth.currentUser).thenReturn(null)
+        viewModel.submitReport("peer_99", "Spam / Scams", "Details")
+        assertTrue(viewModel.errorState.value?.contains("Session expired") == true)
+    }
+
+    @Test
+    fun `blockAndLeave blocks user, ends session, stops sync, and invokes callback`() = runTest(testDispatcher) {
+        whenever(chatRepository.getMessages("session_123")).thenReturn(flowOf(emptyList()))
+        viewModel.joinSession("session_123", "peer_99")
+
+        var callbackInvoked = false
+        viewModel.blockAndLeave("peer_99") { callbackInvoked = true }
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(callbackInvoked)
+        verify(moderationRepository).blockUser("test_user_456", "peer_99")
+        verify(chatRepository).updateSessionStatus("session_123", "ended")
+        verify(chatRepository).stopFirestoreSync("session_123")
+    }
+
+    @Test
+    fun `onCleared stops Firestore sync and cleans up VoiceNoteManager`() = runTest(testDispatcher) {
+        whenever(chatRepository.getMessages("session_123")).thenReturn(flowOf(emptyList()))
+        viewModel.joinSession("session_123", "peer_99")
+
+        val method = ChatViewModel::class.java.getDeclaredMethod("onCleared")
+        method.isAccessible = true
+        method.invoke(viewModel)
+
+        verify(chatRepository).stopFirestoreSync("session_123")
+        verify(voiceNoteManager).cancelRecording()
+        verify(voiceNoteManager).stopPlayback()
+        verify(voiceNoteManager).cleanup()
+    }
+
+    @Test
+    fun `joinSession clears prior messages immediately when switching sessions`() = runTest(testDispatcher) {
+        val session1Messages = listOf(
+            Message(id = "m1", senderId = "peer_1", text = "Session 1 message", timestamp = 1000L)
+        )
+        val session2Flow = MutableSharedFlow<List<Message>>()
+        whenever(chatRepository.getMessages("session_1")).thenReturn(flowOf(session1Messages))
+        whenever(chatRepository.getMessages("session_2")).thenReturn(session2Flow)
+
+        viewModel.joinSession("session_1", "peer_1")
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(1, viewModel.messages.value.size)
+
+        viewModel.joinSession("session_2", "peer_2")
+        assertTrue(viewModel.messages.value.isEmpty())
+    }
+
+    @Test
+    fun `togglePhotoConsent reverts consent and sets errorState on real NullPointerException`() = runTest(testDispatcher) {
+        whenever(chatRepository.getMessages("session_123")).thenReturn(flowOf(emptyList()))
+        runBlocking {
+            whenever(chatRepository.updatePhotoConsent("session_123", true, true)).thenAnswer {
+                throw NullPointerException("firestore failure")
+            }
+        }
+
+        viewModel.joinSession("session_123", "peer_1")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.togglePhotoConsent()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(viewModel.myPhotoConsent.value)
+        assertTrue(viewModel.errorState.value?.contains("firestore failure") == true)
     }
 }

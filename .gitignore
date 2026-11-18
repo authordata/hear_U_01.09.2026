@@ -1,11 +1,24 @@
 *.iml
 .gradle
+.kotlin/
 /local.properties
 /.idea/
 .DS_Store
-/build
+build/
 /captures
 .externalNativeBuild
 .cxx
 local.properties
 *_payload.json
+
+# Release signing secrets
+keystore.properties
+*.jks
+*.keystore
+
+# Firebase CLI & Functions dependencies
+functions/node_modules/
+.firebase/
+
+# Build/CI logs
+*.log

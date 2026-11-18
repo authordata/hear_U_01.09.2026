@@ -1,14 +1,28 @@
 package com.hearu.app.audio
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.os.Build
 import android.util.Log
-import kotlinx.coroutines.*
+import androidx.core.content.ContextCompat
+import com.hearu.app.di.IoDispatcher
+import com.hearu.app.di.MainDispatcher
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -16,20 +30,24 @@ import kotlin.math.min
 import kotlin.random.Random
 
 @Singleton
-class VoiceNoteManager(
-    private val mainDispatcher: CoroutineDispatcher = Dispatchers.Main
+class VoiceNoteManager @Inject constructor(
+    @MainDispatcher private val mainDispatcher: CoroutineDispatcher,
+    @IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) {
-    @Inject
-    constructor() : this(Dispatchers.Main)
-
+    constructor(mainDispatcher: CoroutineDispatcher = Dispatchers.Main) : this(
+        mainDispatcher = mainDispatcher,
+        ioDispatcher = Dispatchers.IO
+    )
     private val managerScope = CoroutineScope(SupervisorJob() + mainDispatcher)
 
     private var mediaRecorder: MediaRecorder? = null
     private var mediaPlayer: MediaPlayer? = null
     private var currentOutputFile: File? = null
+    private var isPlayerPrepared: Boolean = false
 
     private var recordingJob: Job? = null
     private var playbackJob: Job? = null
+    private var playbackPrepareJob: Job? = null
 
     private val _isRecording = MutableStateFlow(false)
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
@@ -55,16 +73,28 @@ class VoiceNoteManager(
         stopPlayback()
         cancelRecording()
 
+        if (ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.RECORD_AUDIO
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            Log.w(TAG, "RECORD_AUDIO permission not granted")
+            return false
+        }
+
+        if (!outputDir.isDirectory && !outputDir.mkdirs()) {
+            Log.w(TAG, "Invalid voice note output directory")
+            return false
+        }
+
         recordedAmplitudes.clear()
         _liveAmplitudes.value = emptyList()
         _recordingDuration.value = 0
 
         val file = File(outputDir, "voice_note_${System.currentTimeMillis()}.m4a")
-        currentOutputFile = file
-
-        var recorderStarted = false
+        var recorder: MediaRecorder? = null
         try {
-            val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 MediaRecorder(context)
             } else {
                 @Suppress("DEPRECATION")
@@ -81,14 +111,20 @@ class VoiceNoteManager(
                 start()
             }
             mediaRecorder = recorder
-            recorderStarted = true
+            currentOutputFile = file
+            _isRecording.value = true
         } catch (e: Exception) {
-            Log.w(TAG, "Hardware MediaRecorder unavailable or permissions missing; using synthetic visualizer mode: ${e.message}")
+            Log.e(TAG, "Failed to start MediaRecorder: ${e.message}")
+            try {
+                recorder?.release()
+            } catch (_: Exception) {
+            }
+            file.delete()
             mediaRecorder = null
-            recorderStarted = true
+            currentOutputFile = null
+            _isRecording.value = false
+            return false
         }
-
-        _isRecording.value = true
 
         recordingJob = managerScope.launch {
             var elapsedMs = 0
@@ -99,23 +135,22 @@ class VoiceNoteManager(
 
                 val amp = try {
                     mediaRecorder?.maxAmplitude?.let { raw ->
-                        val normalized = (raw / 32767f * 100).toInt().coerceIn(15, 95)
-                        normalized
-                    } ?: (Random.nextInt(20, 85))
-                } catch (e: Exception) {
+                        (raw / 32767f * 100).toInt().coerceIn(15, 95)
+                    } ?: Random.nextInt(20, 85)
+                } catch (_: Exception) {
                     Random.nextInt(20, 85)
                 }
 
                 recordedAmplitudes.add(amp)
-                if (recordedAmplitudes.size > 30) {
-                    _liveAmplitudes.value = recordedAmplitudes.takeLast(30)
+                _liveAmplitudes.value = if (recordedAmplitudes.size > 30) {
+                    recordedAmplitudes.takeLast(30)
                 } else {
-                    _liveAmplitudes.value = recordedAmplitudes.toList()
+                    recordedAmplitudes.toList()
                 }
             }
         }
 
-        return recorderStarted
+        return true
     }
 
     data class RecordingResult(
@@ -128,42 +163,52 @@ class VoiceNoteManager(
         if (!_isRecording.value) return null
         _isRecording.value = false
         recordingJob?.cancel()
+        recordingJob = null
 
+        val recorder = mediaRecorder
         try {
-            mediaRecorder?.apply {
-                stop()
-                release()
-            }
+            recorder?.stop()
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping MediaRecorder: ${e.message}")
+        } finally {
+            try {
+                recorder?.release()
+            } catch (_: Exception) {
+            }
+            mediaRecorder = null
         }
-        mediaRecorder = null
 
         val finalDuration = _recordingDuration.value.coerceAtLeast(1)
         val sampledAmps = sampleWaveform(recordedAmplitudes, targetCount = 28)
+        val outputFile = currentOutputFile
+        currentOutputFile = null
 
-        val result = RecordingResult(
-            file = currentOutputFile,
+        return RecordingResult(
+            file = outputFile,
             durationSec = finalDuration,
             amplitudes = sampledAmps
         )
-
-        return result
     }
 
     fun cancelRecording() {
         recordingJob?.cancel()
         recordingJob = null
+        val recorder = mediaRecorder
         try {
-            mediaRecorder?.apply {
-                stop()
-                reset()
-                release()
-            }
+            recorder?.stop()
         } catch (e: Exception) {
-            Log.e(TAG, "Error cancelling MediaRecorder: ${e.message}")
+            Log.e(TAG, "Error stopping MediaRecorder on cancel: ${e.message}")
+        } finally {
+            try {
+                recorder?.reset()
+            } catch (_: Exception) {
+            }
+            try {
+                recorder?.release()
+            } catch (_: Exception) {
+            }
+            mediaRecorder = null
         }
-        mediaRecorder = null
         currentOutputFile?.delete()
         currentOutputFile = null
 
@@ -190,47 +235,109 @@ class VoiceNoteManager(
         _isPlaying.value = true
         _playbackProgress.value = 0f
 
-        val player = MediaPlayer()
-        try {
-            if (audioPathOrUrl != null && File(audioPathOrUrl).exists()) {
-                player.setDataSource(audioPathOrUrl)
-                player.prepare()
-            } else if (!audioPathOrUrl.isNullOrBlank()) {
-                player.setDataSource(audioPathOrUrl)
-                player.prepareAsync()
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to load audio file: ${e.message}")
-        }
-
-        player.setOnCompletionListener {
-            stopPlayback()
-        }
-
-        try {
-            player.start()
-        } catch (e: Exception) {
-            Log.w(TAG, "Could not start native audio output, simulating playback: ${e.message}")
-        }
-
-        mediaPlayer = player
-
         startPlaybackProgressTracking(durationSec)
+
+        if (audioPathOrUrl.isNullOrBlank()) {
+            return
+        }
+
+        playbackPrepareJob = managerScope.launch {
+            val isLocalFile = withContext(ioDispatcher) {
+                File(audioPathOrUrl).exists()
+            }
+            if (_playingMessageId.value != messageId) return@launch
+
+            val player = MediaPlayer()
+            mediaPlayer = player
+            isPlayerPrepared = false
+
+            player.setOnCompletionListener {
+                stopPlayback()
+            }
+            player.setOnErrorListener { mp, _, _ ->
+                if (mediaPlayer === mp) {
+                    stopPlayback()
+                } else {
+                    releasePlayerSafely(mp)
+                }
+                true
+            }
+            player.setOnPreparedListener { mp ->
+                if (_playingMessageId.value != messageId || mediaPlayer !== mp) {
+                    releasePlayerSafely(mp)
+                    return@setOnPreparedListener
+                }
+                isPlayerPrepared = true
+                if (_isPlaying.value) {
+                    try {
+                        mp.start()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Could not start prepared MediaPlayer: ${e.message}")
+                    }
+                }
+            }
+
+            try {
+                if (isLocalFile) {
+                    withContext(ioDispatcher) {
+                        player.setDataSource(audioPathOrUrl)
+                        player.prepare()
+                    }
+                    if (_playingMessageId.value != messageId || mediaPlayer !== player) {
+                        releasePlayerSafely(player)
+                        return@launch
+                    }
+                    isPlayerPrepared = true
+                    if (_isPlaying.value) {
+                        player.start()
+                    }
+                } else {
+                    withContext(ioDispatcher) {
+                        player.setDataSource(audioPathOrUrl)
+                    }
+                    if (_playingMessageId.value != messageId || mediaPlayer !== player) {
+                        releasePlayerSafely(player)
+                        return@launch
+                    }
+                    player.prepareAsync()
+                }
+            } catch (e: CancellationException) {
+                releasePlayerSafely(player)
+                if (mediaPlayer === player) {
+                    mediaPlayer = null
+                    isPlayerPrepared = false
+                }
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not prepare audio playback: ${e.message}")
+                if (mediaPlayer === player) {
+                    stopPlayback()
+                } else {
+                    releasePlayerSafely(player)
+                }
+            }
+        }
     }
 
     private fun pausePlayback() {
         _isPlaying.value = false
         playbackJob?.cancel()
-        try {
-            mediaPlayer?.pause()
-        } catch (_: Exception) {}
+        if (isPlayerPrepared) {
+            try {
+                mediaPlayer?.pause()
+            } catch (_: Exception) {
+            }
+        }
     }
 
     private fun resumePlayback(durationSec: Int) {
         _isPlaying.value = true
-        try {
-            mediaPlayer?.start()
-        } catch (_: Exception) {}
+        if (isPlayerPrepared) {
+            try {
+                mediaPlayer?.start()
+            } catch (_: Exception) {
+            }
+        }
         startPlaybackProgressTracking(durationSec)
     }
 
@@ -255,26 +362,54 @@ class VoiceNoteManager(
         if (_playingMessageId.value != messageId) {
             _playingMessageId.value = messageId
         }
-        _playbackProgress.value = progress.coerceIn(0f, 1f)
+        val clamped = progress.coerceIn(0f, 1f)
+        _playbackProgress.value = clamped
         val totalDurationMs = (durationSec.coerceAtLeast(1) * 1000).toLong()
-        val targetMs = (progress * totalDurationMs).toInt()
-        try {
-            mediaPlayer?.seekTo(targetMs)
-        } catch (_: Exception) {}
+        val targetMs = (clamped * totalDurationMs).toInt()
+        if (isPlayerPrepared) {
+            try {
+                mediaPlayer?.seekTo(targetMs)
+            } catch (_: Exception) {
+            }
+        }
     }
 
     fun stopPlayback() {
         _isPlaying.value = false
         _playingMessageId.value = null
         _playbackProgress.value = 0f
+        playbackPrepareJob?.cancel()
+        playbackPrepareJob = null
         playbackJob?.cancel()
-        try {
-            mediaPlayer?.apply {
-                stop()
-                release()
-            }
-        } catch (_: Exception) {}
+        playbackJob = null
+
+        val player = mediaPlayer
+        val wasPrepared = isPlayerPrepared
         mediaPlayer = null
+        isPlayerPrepared = false
+        if (player != null) {
+            try {
+                if (wasPrepared) {
+                    player.stop()
+                }
+            } catch (_: Exception) {
+            } finally {
+                releasePlayerSafely(player)
+            }
+        }
+    }
+
+    fun cleanup() {
+        cancelRecording()
+        stopPlayback()
+        managerScope.coroutineContext[Job]?.cancelChildren()
+    }
+
+    private fun releasePlayerSafely(player: MediaPlayer?) {
+        try {
+            player?.release()
+        } catch (_: Exception) {
+        }
     }
 
     private fun sampleWaveform(raw: List<Int>, targetCount: Int = 28): List<Int> {

@@ -1,0 +1,17 @@
+{
+  "name": "hearu-functions",
+  "description": "Cloud Functions for HearU",
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "scripts": {
+    "syntax": "node --check index.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0",
+    "firebase-functions": "^5.1.1"
+  },
+  "private": true
+}

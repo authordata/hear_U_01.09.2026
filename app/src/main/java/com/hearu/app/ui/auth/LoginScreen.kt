@@ -2,22 +2,65 @@ package com.hearu.app.ui.auth
 
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -26,7 +69,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hearu.app.R
+import com.hearu.app.ui.dialogs.PrivacyPolicyDialog
 import com.hearu.app.ui.theme.HearUTheme
+import kotlinx.coroutines.launch
 
 enum class AuthMode {
     SIGN_IN,
@@ -41,6 +86,30 @@ fun LoginScreen(
     viewModel: AuthViewModel = hiltViewModel(),
     initialMode: AuthMode = AuthMode.SIGN_IN
 ) {
+    val authState by viewModel.authState.collectAsStateWithLifecycle()
+    LoginScreenContent(
+        onLoginSubmit = onLoginSubmit,
+        onSignUpSubmit = onSignUpSubmit,
+        onAnonymousSubmit = onAnonymousSubmit,
+        onPasswordResetSubmit = { email, onSuccess, onError ->
+            viewModel.sendPasswordReset(email, onSuccess, onError)
+        },
+        authState = authState,
+        onClearError = { viewModel.clearError() },
+        initialMode = initialMode
+    )
+}
+
+@Composable
+fun LoginScreenContent(
+    onLoginSubmit: (String, String) -> Unit = { _, _ -> },
+    onSignUpSubmit: (String, String) -> Unit = { _, _ -> },
+    onAnonymousSubmit: () -> Unit = {},
+    onPasswordResetSubmit: (email: String, onSuccess: () -> Unit, onError: (String) -> Unit) -> Unit = { _, _, _ -> },
+    authState: AuthState = AuthState.Idle,
+    onClearError: () -> Unit = {},
+    initialMode: AuthMode = AuthMode.SIGN_IN
+) {
     var authMode by rememberSaveable { mutableStateOf(initialMode) }
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
@@ -49,329 +118,414 @@ fun LoginScreen(
     var confirmPasswordVisible by rememberSaveable { mutableStateOf(false) }
     var isAgeConfirmed by rememberSaveable { mutableStateOf(false) }
     var showAgeGateDialog by rememberSaveable { mutableStateOf(false) }
+    var showForgotPasswordDialog by rememberSaveable { mutableStateOf(false) }
+    var resetEmail by rememberSaveable { mutableStateOf("") }
+    var resetError by rememberSaveable { mutableStateOf<String?>(null) }
+    var showPrivacyPolicyDialog by rememberSaveable { mutableStateOf(false) }
     var localError by rememberSaveable { mutableStateOf<String?>(null) }
 
-    val authState by viewModel.authState.collectAsStateWithLifecycle()
     val isLoading = authState is AuthState.Loading
     val serverError = (authState as? AuthState.Error)?.message
     val activeErrorMessage = localError ?: serverError
 
     val scrollState = rememberScrollState()
+    val focusManager = LocalFocusManager.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(horizontal = 24.dp, vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        // App Title
-        Text(
-            text = if (authMode == AuthMode.SIGN_IN) {
-                stringResource(R.string.welcome_title)
+    val submitAction = {
+        val trimmedEmail = email.trim()
+        if (authMode == AuthMode.SIGN_IN) {
+            onLoginSubmit(trimmedEmail, password)
+        } else {
+            if (password != confirmPassword) {
+                localError = "Passwords do not match"
+            } else if (password.length < 8) {
+                localError = "Password must be at least 8 characters."
+            } else if (!isAgeConfirmed) {
+                localError = "You must be at least 18 years old to join HearU."
             } else {
-                stringResource(R.string.register_btn)
-            },
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = if (authMode == AuthMode.SIGN_IN) {
-                "Sign in to connect with a supportive, empathetic listener"
-            } else {
-                "Join a safe, anonymous haven for listening and healing"
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(28.dp))
-
-        // Segmented Tab Row for Mode Switching
-        TabRow(
-            selectedTabIndex = if (authMode == AuthMode.SIGN_IN) 0 else 1,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 24.dp)
-        ) {
-            Tab(
-                selected = authMode == AuthMode.SIGN_IN,
-                onClick = {
-                    authMode = AuthMode.SIGN_IN
-                    localError = null
-                    viewModel.clearError()
-                },
-                text = {
-                    Text(
-                        stringResource(R.string.sign_in_tab),
-                        fontWeight = if (authMode == AuthMode.SIGN_IN) FontWeight.Bold else FontWeight.Normal
-                    )
-                }
-            )
-            Tab(
-                selected = authMode == AuthMode.SIGN_UP,
-                onClick = {
-                    authMode = AuthMode.SIGN_UP
-                    localError = null
-                    viewModel.clearError()
-                },
-                text = {
-                    Text(
-                        stringResource(R.string.sign_up_tab),
-                        fontWeight = if (authMode == AuthMode.SIGN_UP) FontWeight.Bold else FontWeight.Normal
-                    )
-                }
-            )
-        }
-
-        // Email Address Field
-        OutlinedTextField(
-            value = email,
-            onValueChange = {
-                email = it
                 localError = null
-                viewModel.clearError()
-            },
-            label = { Text("Email") },
-            placeholder = { Text("user@example.com") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("email_field"),
-            singleLine = true,
-            isError = activeErrorMessage != null,
-            shape = RoundedCornerShape(12.dp)
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Password Field
-        OutlinedTextField(
-            value = password,
-            onValueChange = {
-                password = it
-                localError = null
-                viewModel.clearError()
-            },
-            label = { Text("Password") },
-            placeholder = { Text("At least 8 characters") },
-            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-            trailingIcon = {
-                val image = if (passwordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
-                IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                    Icon(imageVector = image, contentDescription = if (passwordVisible) "Hide password" else "Show password")
-                }
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("password_field"),
-            singleLine = true,
-            isError = activeErrorMessage != null,
-            shape = RoundedCornerShape(12.dp)
-        )
-
-        // Confirm Password Field (Sign Up Mode only)
-        AnimatedVisibility(visible = authMode == AuthMode.SIGN_UP) {
-            Column {
-                Spacer(modifier = Modifier.height(16.dp))
-                OutlinedTextField(
-                    value = confirmPassword,
-                    onValueChange = {
-                        confirmPassword = it
-                        localError = null
-                        viewModel.clearError()
-                    },
-                    label = { Text(stringResource(R.string.confirm_password_label)) },
-                    placeholder = { Text("Re-enter your password") },
-                    visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    trailingIcon = {
-                        val image = if (confirmPasswordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
-                        IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
-                            Icon(imageVector = image, contentDescription = if (confirmPasswordVisible) "Hide password" else "Show password")
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("confirm_password_field"),
-                    singleLine = true,
-                    isError = activeErrorMessage != null,
-                    shape = RoundedCornerShape(12.dp)
-                )
+                onSignUpSubmit(trimmedEmail, password)
             }
         }
+    }
 
-        // 18+ Age Verification Policy Gate (Sign Up Mode)
-        AnimatedVisibility(visible = authMode == AuthMode.SIGN_UP) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        contentWindowInsets = WindowInsets(0)
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .systemBarsPadding()
+                .imePadding()
+                .verticalScroll(scrollState)
+                .padding(horizontal = 24.dp, vertical = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // App Title
+            Text(
+                text = if (authMode == AuthMode.SIGN_IN) {
+                    stringResource(R.string.welcome_title)
+                } else {
+                    stringResource(R.string.register_btn)
+                },
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = if (authMode == AuthMode.SIGN_IN) {
+                    "Sign in to connect with a supportive, empathetic listener"
+                } else {
+                    "Join a safe, anonymous haven for listening and healing"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // Segmented Tab Row for Mode Switching
+            TabRow(
+                selectedTabIndex = if (authMode == AuthMode.SIGN_IN) 0 else 1,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 12.dp)
+                    .padding(bottom = 24.dp)
             ) {
-                Checkbox(
-                    checked = isAgeConfirmed,
-                    onCheckedChange = {
-                        isAgeConfirmed = it
+                Tab(
+                    selected = authMode == AuthMode.SIGN_IN,
+                    onClick = {
+                        authMode = AuthMode.SIGN_IN
                         localError = null
+                        onClearError()
                     },
-                    modifier = Modifier.testTag("age_gate_checkbox")
+                    text = {
+                        Text(
+                            stringResource(R.string.sign_in_tab),
+                            fontWeight = if (authMode == AuthMode.SIGN_IN) FontWeight.Bold else FontWeight.Normal
+                        )
+                    }
+                )
+                Tab(
+                    selected = authMode == AuthMode.SIGN_UP,
+                    onClick = {
+                        authMode = AuthMode.SIGN_UP
+                        localError = null
+                        onClearError()
+                    },
+                    text = {
+                        Text(
+                            stringResource(R.string.sign_up_tab),
+                            fontWeight = if (authMode == AuthMode.SIGN_UP) FontWeight.Bold else FontWeight.Normal
+                        )
+                    }
+                )
+            }
+
+            // Email Address Field
+            OutlinedTextField(
+                value = email,
+                onValueChange = {
+                    email = it
+                    localError = null
+                    onClearError()
+                },
+                label = { Text(stringResource(R.string.email_label)) },
+                placeholder = { Text("user@example.com") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("email_field"),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Email,
+                    imeAction = ImeAction.Next
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                ),
+                isError = activeErrorMessage != null,
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Password Field
+            OutlinedTextField(
+                value = password,
+                onValueChange = {
+                    password = it
+                    localError = null
+                    onClearError()
+                },
+                label = { Text(stringResource(R.string.password_label)) },
+                placeholder = { Text("At least 8 characters") },
+                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    val image = if (passwordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
+                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                        Icon(
+                            imageVector = image,
+                            contentDescription = if (passwordVisible) "Hide password" else "Show password"
+                        )
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("password_field"),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = if (authMode == AuthMode.SIGN_IN) ImeAction.Done else ImeAction.Next
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                    onDone = {
+                        focusManager.clearFocus()
+                        if (email.isNotBlank() && password.isNotBlank() && !isLoading) {
+                            submitAction()
+                        }
+                    }
+                ),
+                isError = activeErrorMessage != null,
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            if (authMode == AuthMode.SIGN_IN) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(
+                        onClick = {
+                            resetEmail = email.trim()
+                            resetError = null
+                            showForgotPasswordDialog = true
+                        }
+                    ) {
+                        Text(stringResource(R.string.forgot_password))
+                    }
+                }
+            }
+
+            // Confirm Password Field (Sign Up Mode only)
+            AnimatedVisibility(visible = authMode == AuthMode.SIGN_UP) {
+                Column {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = confirmPassword,
+                        onValueChange = {
+                            confirmPassword = it
+                            localError = null
+                            onClearError()
+                        },
+                        label = { Text(stringResource(R.string.confirm_password_label)) },
+                        placeholder = { Text("Re-enter your password") },
+                        visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            val image = if (confirmPasswordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
+                            IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
+                                Icon(
+                                    imageVector = image,
+                                    contentDescription = if (confirmPasswordVisible) "Hide password" else "Show password"
+                                )
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("confirm_password_field"),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = { focusManager.clearFocus() }
+                        ),
+                        isError = activeErrorMessage != null,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+            }
+
+            // 18+ Age Verification Policy Gate (Sign Up Mode)
+            AnimatedVisibility(visible = authMode == AuthMode.SIGN_UP) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp)
+                        .heightIn(min = 48.dp)
+                ) {
+                    Checkbox(
+                        checked = isAgeConfirmed,
+                        onCheckedChange = {
+                            isAgeConfirmed = it
+                            localError = null
+                        },
+                        modifier = Modifier.testTag("age_gate_checkbox")
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "I certify that I am 18 years of age or older and agree to HearU's safe haven guidelines.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable {
+                                isAgeConfirmed = !isAgeConfirmed
+                                localError = null
+                            }
+                            .padding(vertical = 8.dp)
+                    )
+                }
+            }
+
+            // Inline Error Message
+            AnimatedVisibility(visible = activeErrorMessage != null) {
+                activeErrorMessage?.let { msg ->
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = msg,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(12.dp),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Main Action Button (Sign In or Sign Up)
+            val isFormValid = if (authMode == AuthMode.SIGN_IN) {
+                email.isNotBlank() && password.isNotBlank()
+            } else {
+                email.isNotBlank() && password.isNotBlank() && confirmPassword.isNotBlank() && isAgeConfirmed
+            }
+
+            Button(
+                onClick = submitAction,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .testTag(if (authMode == AuthMode.SIGN_IN) "login_button" else "signup_button"),
+                enabled = !isLoading && isFormValid,
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        strokeWidth = 2.5.dp
+                    )
+                } else {
+                    Text(
+                        text = if (authMode == AuthMode.SIGN_IN) {
+                            stringResource(R.string.login_btn)
+                        } else {
+                            stringResource(R.string.register_btn)
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Anonymous Guest Access with Divider
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                HorizontalDivider(modifier = Modifier.weight(1f))
+                Text(
+                    text = " OR ",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                )
+                HorizontalDivider(modifier = Modifier.weight(1f))
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            OutlinedButton(
+                onClick = {
+                    if (!isAgeConfirmed) {
+                        showAgeGateDialog = true
+                    } else {
+                        onAnonymousSubmit()
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .testTag("anonymous_login_button"),
+                shape = RoundedCornerShape(12.dp),
+                enabled = !isLoading
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Shield,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "I certify that I am 18 years of age or older and agree to HearU's safe haven guidelines.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface
+                    text = "Continue as Anonymous Guest",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
-        }
 
-        // Inline Error Message
-        AnimatedVisibility(visible = activeErrorMessage != null) {
-            activeErrorMessage?.let { msg ->
-                Spacer(modifier = Modifier.height(12.dp))
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    ),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = msg,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(12.dp),
-                        textAlign = TextAlign.Center
-                    )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Toggle Mode Secondary Action
+            TextButton(
+                onClick = {
+                    localError = null
+                    onClearError()
+                    authMode = if (authMode == AuthMode.SIGN_IN) AuthMode.SIGN_UP else AuthMode.SIGN_IN
                 }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Main Action Button (Sign In or Sign Up)
-        val isFormValid = if (authMode == AuthMode.SIGN_IN) {
-            email.isNotBlank() && password.isNotBlank()
-        } else {
-            email.isNotBlank() && password.isNotBlank() && confirmPassword.isNotBlank() && isAgeConfirmed
-        }
-
-        Button(
-            onClick = {
-                if (authMode == AuthMode.SIGN_IN) {
-                    onLoginSubmit(email, password)
-                } else {
-                    if (password != confirmPassword) {
-                        localError = "Passwords do not match"
-                    } else if (password.length < 8) {
-                        localError = "Password must be at least 8 characters."
-                    } else if (!isAgeConfirmed) {
-                        localError = "You must be at least 18 years old to join HearU."
-                    } else {
-                        localError = null
-                        onSignUpSubmit(email, password)
-                    }
-                }
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp)
-                .testTag(if (authMode == AuthMode.SIGN_IN) "login_button" else "signup_button"),
-            enabled = !isLoading && isFormValid,
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            if (isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    strokeWidth = 2.5.dp
-                )
-            } else {
+            ) {
                 Text(
                     text = if (authMode == AuthMode.SIGN_IN) {
-                        stringResource(R.string.login_btn)
+                        stringResource(R.string.dont_have_account)
                     } else {
-                        stringResource(R.string.register_btn)
+                        stringResource(R.string.already_have_account)
                     },
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
-        }
 
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // Anonymous Guest Access with Divider
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            HorizontalDivider(modifier = Modifier.weight(1f))
-            Text(
-                text = " OR ",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
-            HorizontalDivider(modifier = Modifier.weight(1f))
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        OutlinedButton(
-            onClick = {
-                if (!isAgeConfirmed) {
-                    showAgeGateDialog = true
-                } else {
-                    onAnonymousSubmit()
-                }
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp)
-                .testTag("anonymous_login_button"),
-            shape = RoundedCornerShape(12.dp),
-            enabled = !isLoading
-        ) {
-            Icon(
-                imageVector = Icons.Default.Shield,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Continue as Anonymous Guest",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Toggle Mode Secondary Action
-        TextButton(
-            onClick = {
-                localError = null
-                viewModel.clearError()
-                authMode = if (authMode == AuthMode.SIGN_IN) AuthMode.SIGN_UP else AuthMode.SIGN_IN
+            TextButton(
+                onClick = { showPrivacyPolicyDialog = true }
+            ) {
+                Text(
+                    text = stringResource(R.string.privacy_policy),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-        ) {
-            Text(
-                text = if (authMode == AuthMode.SIGN_IN) {
-                    stringResource(R.string.dont_have_account)
-                } else {
-                    stringResource(R.string.already_have_account)
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.SemiBold
-            )
         }
     }
 
@@ -401,13 +555,83 @@ fun LoginScreen(
             }
         )
     }
+
+    if (showForgotPasswordDialog) {
+        AlertDialog(
+            onDismissRequest = { showForgotPasswordDialog = false },
+            title = { Text("Reset Password") },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Enter your account email address and we will send you a password reset link.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    OutlinedTextField(
+                        value = resetEmail,
+                        onValueChange = {
+                            resetEmail = it
+                            resetError = null
+                        },
+                        label = { Text(stringResource(R.string.email_label)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Email,
+                            imeAction = ImeAction.Done
+                        ),
+                        isError = resetError != null,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    resetError?.let { err ->
+                        Text(
+                            text = err,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val trimmed = resetEmail.trim()
+                        onPasswordResetSubmit(
+                            trimmed,
+                            {
+                                showForgotPasswordDialog = false
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar("Password reset link sent to $trimmed")
+                                }
+                            },
+                            { errorMsg ->
+                                resetError = errorMsg
+                            }
+                        )
+                    }
+                ) {
+                    Text("Send Reset Link")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showForgotPasswordDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showPrivacyPolicyDialog) {
+        PrivacyPolicyDialog(onDismiss = { showPrivacyPolicyDialog = false })
+    }
 }
 
 @Preview(name = "Sign In Mode", showBackground = true)
 @Composable
 fun LoginScreenSignInPreview() {
     HearUTheme {
-        LoginScreen(initialMode = AuthMode.SIGN_IN)
+        LoginScreenContent(initialMode = AuthMode.SIGN_IN)
     }
 }
 
@@ -415,7 +639,7 @@ fun LoginScreenSignInPreview() {
 @Composable
 fun LoginScreenSignUpPreview() {
     HearUTheme {
-        LoginScreen(initialMode = AuthMode.SIGN_UP)
+        LoginScreenContent(initialMode = AuthMode.SIGN_UP)
     }
 }
 
@@ -423,6 +647,6 @@ fun LoginScreenSignUpPreview() {
 @Composable
 fun LoginScreenDarkPreview() {
     HearUTheme {
-        LoginScreen(initialMode = AuthMode.SIGN_IN)
+        LoginScreenContent(initialMode = AuthMode.SIGN_IN)
     }
 }

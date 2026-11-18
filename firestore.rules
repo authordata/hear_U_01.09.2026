@@ -10,59 +10,147 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // User Profiles — private by default, public fields exposed via query
-    match /users/{userId} {
-      // Only the owner can read their own full profile
-      allow read: if isOwner(userId);
-      // Create: owner only, cannot self-assign rating or createdAt
-      allow create: if isOwner(userId)
-        && !request.resource.data.keys().hasAny(['rating'])
-        && request.resource.data.email is string;
-      // Update: owner can only modify safe fields, not rating/role/createdAt
-      allow update: if isOwner(userId)
-        && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['displayName', 'emotionTags', 'status', 'photoUrl', 'fcmToken', 'tokenUpdatedAt']);
-      // Soft-delete only (mark inactive), hard delete forbidden
-      allow delete: if false;
+    function isActiveSessionParticipant(sessionId) {
+      let path = /databases/$(database)/documents/sessions/$(sessionId);
+      return exists(path)
+        && get(path).data.status == 'active'
+        && (get(path).data.seekerId == request.auth.uid || get(path).data.giverId == request.auth.uid);
     }
 
-    // Public listener discovery (anonymized — no email/uid exposed)
+    function isSessionParticipantReader(sessionId) {
+      let path = /databases/$(database)/documents/sessions/$(sessionId);
+      return exists(path)
+        && (get(path).data.seekerId == request.auth.uid || get(path).data.giverId == request.auth.uid);
+    }
+
+    // User Profiles — private by default; owner-scoped read/write/delete
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+
+      // Create: owner only, cannot self-assign rating; supports email & anonymous auth
+      allow create: if isOwner(userId)
+        && !request.resource.data.keys().hasAny(['rating'])
+        && (!('uid' in request.resource.data) || request.resource.data.uid == userId)
+        && (!('email' in request.resource.data) || request.resource.data.email is string)
+        && (!('displayName' in request.resource.data)
+            || (request.resource.data.displayName is string && request.resource.data.displayName.size() <= 100))
+        && (!('role' in request.resource.data)
+            || request.resource.data.role in ['', 'seeker', 'giver', 'both'])
+        && (!('status' in request.resource.data)
+            || request.resource.data.status in ['online', 'offline'])
+        && (!('emotionTags' in request.resource.data)
+            || (request.resource.data.emotionTags is list && request.resource.data.emotionTags.size() <= 10))
+        && (!('blockedUsers' in request.resource.data)
+            || (request.resource.data.blockedUsers is list && request.resource.data.blockedUsers.size() <= 500));
+
+      // Update: owner can modify safe profile/session fields (including blockedUsers & role), never rating/uid/email/createdAt
+      allow update: if isOwner(userId)
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['displayName', 'emotionTags', 'status', 'photoUrl', 'fcmToken', 'tokenUpdatedAt', 'blockedUsers', 'role'])
+        && (!('status' in request.resource.data.diff(resource.data).affectedKeys())
+            || request.resource.data.status in ['online', 'offline'])
+        && (!('role' in request.resource.data.diff(resource.data).affectedKeys())
+            || request.resource.data.role in ['seeker', 'giver', 'both'])
+        && (!('displayName' in request.resource.data.diff(resource.data).affectedKeys())
+            || (request.resource.data.displayName is string
+                && request.resource.data.displayName.size() > 0
+                && request.resource.data.displayName.size() <= 100))
+        && (!('emotionTags' in request.resource.data.diff(resource.data).affectedKeys())
+            || (request.resource.data.emotionTags is list && request.resource.data.emotionTags.size() <= 10))
+        && (!('blockedUsers' in request.resource.data.diff(resource.data).affectedKeys())
+            || (request.resource.data.blockedUsers is list && request.resource.data.blockedUsers.size() <= 500))
+        && (!('photoUrl' in request.resource.data.diff(resource.data).affectedKeys())
+            || request.resource.data.photoUrl == null
+            || (request.resource.data.photoUrl is string && request.resource.data.photoUrl.size() <= 2048))
+        && (!('fcmToken' in request.resource.data.diff(resource.data).affectedKeys())
+            || request.resource.data.fcmToken == null
+            || (request.resource.data.fcmToken is string && request.resource.data.fcmToken.size() <= 512))
+        && (!('tokenUpdatedAt' in request.resource.data.diff(resource.data).affectedKeys())
+            || request.resource.data.tokenUpdatedAt is int);
+
+      // Owner-initiated account deletion (Play Store data-deletion compliance)
+      allow delete: if isOwner(userId);
+    }
+
+    // Public listener discovery (anonymized — rating cannot be self-assigned)
     match /publicListeners/{userId} {
       allow read: if isAuthenticated();
-      allow write: if isOwner(userId)
-        && request.resource.data.keys().hasOnly(['displayName', 'emotionTags', 'status', 'rating']);
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasOnly(['displayName', 'emotionTags', 'status'])
+        && !request.resource.data.keys().hasAny(['rating'])
+        && request.resource.data.displayName is string
+        && request.resource.data.emotionTags is list
+        && request.resource.data.status in ['online', 'offline'];
+      allow update: if isOwner(userId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'emotionTags', 'status'])
+        && request.resource.data.displayName is string
+        && request.resource.data.emotionTags is list
+        && request.resource.data.status in ['online', 'offline'];
+      allow delete: if isOwner(userId);
     }
 
     // Chat Sessions — creation restricted to Cloud Functions (Admin SDK)
     match /sessions/{sessionId} {
-      // Participants can read their own sessions
       allow read: if isAuthenticated() &&
         (resource.data.seekerId == request.auth.uid ||
          resource.data.giverId == request.auth.uid);
-      // Only Cloud Functions (admin) create sessions
       allow create: if false;
-      // Participants can update only status and identityRevealed fields
       allow update: if isAuthenticated() &&
         (resource.data.seekerId == request.auth.uid ||
          resource.data.giverId == request.auth.uid) &&
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['status', 'identityRevealed']);
+          .hasOnly(['status', 'seekerConsent', 'giverConsent', 'identityRevealed']) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['status']) ||
+          (resource.data.status == 'active' && request.resource.data.status == 'ended')) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['seekerConsent']) ||
+          (resource.data.seekerId == request.auth.uid && request.resource.data.seekerConsent is bool)) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['giverConsent']) ||
+          (resource.data.giverId == request.auth.uid && request.resource.data.giverConsent is bool)) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['seekerConsent', 'giverConsent', 'identityRevealed']) || (
+          request.resource.data.get('identityRevealed', false) is bool &&
+          request.resource.data.get('identityRevealed', false) == (
+            request.resource.data.get('seekerConsent', false) == true &&
+            request.resource.data.get('giverConsent', false) == true
+          )
+        ));
       allow delete: if false;
 
       match /messages/{messageId} {
-        // Only session participants can read messages
-        allow read: if isAuthenticated() &&
-          (get(/databases/$(database)/documents/sessions/$(sessionId)).data.seekerId == request.auth.uid ||
-           get(/databases/$(database)/documents/sessions/$(sessionId)).data.giverId == request.auth.uid);
-        // Only session participants can send; sender must be themselves; text bounded
-        allow create: if isAuthenticated() &&
-          request.resource.data.senderId == request.auth.uid &&
-          request.resource.data.text is string &&
-          request.resource.data.text.size() > 0 &&
-          request.resource.data.text.size() <= 2000 &&
-          request.resource.data.timestamp is int &&
-          (get(/databases/$(database)/documents/sessions/$(sessionId)).data.seekerId == request.auth.uid ||
-           get(/databases/$(database)/documents/sessions/$(sessionId)).data.giverId == request.auth.uid);
+        allow read: if isAuthenticated() && isSessionParticipantReader(sessionId);
+        allow create: if isAuthenticated()
+          && isActiveSessionParticipant(sessionId)
+          && request.resource.data.keys().hasOnly([
+               'senderId', 'text', 'timestamp',
+               'isSystemMessage', 'systemMessage',
+               'isVoiceNote', 'voiceNote',
+               'voiceDurationSeconds', 'messageType',
+               'audioUrl', 'audioDurationSec', 'waveformAmplitudes'
+             ])
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 2000
+          && request.resource.data.timestamp is int
+          && ('isSystemMessage' in request.resource.data || 'systemMessage' in request.resource.data)
+          && (!('isSystemMessage' in request.resource.data) || request.resource.data.isSystemMessage == false)
+          && (!('systemMessage' in request.resource.data) || request.resource.data.systemMessage == false)
+          && (!('isVoiceNote' in request.resource.data) || request.resource.data.isVoiceNote is bool)
+          && (!('voiceNote' in request.resource.data) || request.resource.data.voiceNote is bool)
+          && request.resource.data.messageType in ['text', 'voice']
+          && (!('audioUrl' in request.resource.data)
+              || request.resource.data.audioUrl == null
+              || (request.resource.data.audioUrl is string && request.resource.data.audioUrl.size() <= 2048))
+          && (!('audioDurationSec' in request.resource.data)
+              || (request.resource.data.audioDurationSec is int
+                  && request.resource.data.audioDurationSec >= 0
+                  && request.resource.data.audioDurationSec <= 600))
+          && (!('voiceDurationSeconds' in request.resource.data)
+              || (request.resource.data.voiceDurationSeconds is int
+                  && request.resource.data.voiceDurationSeconds >= 0
+                  && request.resource.data.voiceDurationSeconds <= 600))
+          && (!('waveformAmplitudes' in request.resource.data)
+              || (request.resource.data.waveformAmplitudes is list
+                  && request.resource.data.waveformAmplitudes.size() <= 64));
         allow update, delete: if false;
       }
     }
@@ -70,11 +158,24 @@ service cloud.firestore {
     // Reports — write-once by authenticated user; admin-read only
     match /reports/{reportId} {
       allow create: if isAuthenticated()
+        && request.resource.data.keys().hasOnly([
+             'reporterId', 'reportedUserId', 'sessionId',
+             'reason', 'description', 'timestamp', 'status'
+           ])
         && request.resource.data.reporterId == request.auth.uid
         && request.resource.data.reportedUserId is string
+        && request.resource.data.reportedUserId.size() > 0
+        && request.resource.data.reportedUserId != request.auth.uid
+        && request.resource.data.sessionId is string
+        && request.resource.data.sessionId.size() > 0
+        && request.resource.data.sessionId.size() <= 128
         && request.resource.data.reason is string
         && request.resource.data.reason.size() > 0
-        && request.resource.data.reason.size() <= 500;
+        && request.resource.data.reason.size() <= 500
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 2000
+        && request.resource.data.status == 'PENDING_REVIEW'
+        && request.resource.data.timestamp is timestamp;
       allow read, update, delete: if false;
     }
   }

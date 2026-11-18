@@ -1,3 +1,7 @@
+import java.util.Properties
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.jetbrains.kotlin.android)
@@ -9,18 +13,50 @@ plugins {
 
 android {
     namespace = "com.hearu.app"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.hearu.app"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
+        }
+    }
+
+    val keystorePropertiesFile = rootProject.file("keystore.properties")
+    val keystoreProperties = Properties().apply {
+        if (keystorePropertiesFile.exists()) {
+            keystorePropertiesFile.inputStream().use { load(it) }
+        }
+    }
+    val releaseStoreFilePath = keystoreProperties.getProperty("storeFile")
+        ?: System.getenv("KEYSTORE_FILE")
+    val releaseStorePassword = keystoreProperties.getProperty("storePassword")
+        ?: System.getenv("KEYSTORE_PASSWORD")
+    val releaseKeyAlias = keystoreProperties.getProperty("keyAlias")
+        ?: System.getenv("KEY_ALIAS")
+    val releaseKeyPassword = keystoreProperties.getProperty("keyPassword")
+        ?: System.getenv("KEY_PASSWORD")
+
+    val hasReleaseSigning = !releaseStoreFilePath.isNullOrBlank() &&
+        rootProject.file(releaseStoreFilePath).exists() &&
+        !releaseStorePassword.isNullOrBlank() &&
+        !releaseKeyAlias.isNullOrBlank() &&
+        !releaseKeyPassword.isNullOrBlank()
+
+    if (hasReleaseSigning) {
+        signingConfigs {
+            create("release") {
+                storeFile = rootProject.file(releaseStoreFilePath!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
         }
     }
 
@@ -32,7 +68,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
         debug {
             isMinifyEnabled = false
@@ -41,12 +79,12 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
     }
 
     kotlinOptions {
-        jvmTarget = "17"
+        jvmTarget = "1.8"
         freeCompilerArgs += listOf(
             "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi",
             "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api"
@@ -66,8 +104,43 @@ android {
     testOptions {
         unitTests {
             isReturnDefaultValues = true
-            isIncludeAndroidResources = false
+            isIncludeAndroidResources = true
+            all {
+                it.jvmArgs(
+                    "--add-opens=java.base/java.lang=ALL-UNNAMED",
+                    "--add-opens=java.base/java.util=ALL-UNNAMED",
+                    "--add-opens=java.base/java.io=ALL-UNNAMED",
+                    "--add-opens=java.base/java.net=ALL-UNNAMED",
+                    "--add-opens=java.base/java.security=ALL-UNNAMED",
+                    "--add-opens=java.base/java.text=ALL-UNNAMED",
+                    "--add-opens=java.base/jdk.internal.access=ALL-UNNAMED",
+                    "--add-opens=java.desktop/java.awt.font=ALL-UNNAMED"
+                )
+            }
         }
+    }
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    options.isFork = false
+}
+
+afterEvaluate {
+    tasks.withType<JavaCompile>().configureEach {
+        if (name.contains("Test")) {
+            sourceCompatibility = "17"
+            targetCompatibility = "17"
+        }
+    }
+}
+
+tasks.withType<KotlinCompile>().configureEach {
+    if (name.contains("Test")) {
+        compilerOptions.jvmTarget.set(JvmTarget.JVM_17)
     }
 }
 
@@ -85,7 +158,6 @@ dependencies {
 
     // Firebase
     implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.analytics)
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
     implementation(libs.firebase.functions)
@@ -108,12 +180,19 @@ dependencies {
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
 
-    // Unit Testing
+    // Unit, Robolectric & Compose JVM Testing
     testImplementation(libs.junit)
     testImplementation(libs.mockito.core)
     testImplementation(libs.mockito.kotlin)
     testImplementation(libs.turbine)
     testImplementation(libs.coroutines.test)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core.ktx)
+    testImplementation(libs.androidx.junit)
+    testImplementation(libs.androidx.navigation.testing)
+    testImplementation(libs.room.testing)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.ui.test.junit4)
 
     // Instrumented / UI Testing
     androidTestImplementation(libs.androidx.junit)

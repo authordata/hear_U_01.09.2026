@@ -1,19 +1,54 @@
 package com.hearu.app.ui.chat
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Emergency
 import androidx.compose.material.icons.filled.Spa
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -22,6 +57,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hearu.app.model.Message
 import com.hearu.app.ui.dialogs.CrisisSupportDialog
+import kotlinx.coroutines.flow.first
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -41,6 +77,30 @@ fun AIChatScreen(
     val quotaUsed by viewModel.quotaUsed.collectAsStateWithLifecycle()
     var inputText by rememberSaveable { mutableStateOf("") }
     var showLocalCrisisDialog by rememberSaveable { mutableStateOf(false) }
+
+    val keyedMessages = remember(messages) {
+        val seen = HashSet<String>(messages.size)
+        messages.mapIndexed { idx, msg ->
+            val base = msg.id.ifBlank { "blank_${idx}_${msg.senderId}_${msg.timestamp}" }
+            var candidate = base
+            var suffix = idx
+            while (!seen.add(candidate)) {
+                candidate = "${base}_${suffix++}"
+            }
+            msg to candidate
+        }
+    }
+
+    val listState = rememberLazyListState()
+    val expectedItemCount = 1 + keyedMessages.size + if (isLoading) 1 else 0
+    LaunchedEffect(keyedMessages.size, isLoading) {
+        if (keyedMessages.isNotEmpty()) {
+            val settledCount = snapshotFlow { listState.layoutInfo.totalItemsCount }
+                .first { it >= expectedItemCount }
+            val targetIndex = (expectedItemCount - 1).coerceIn(0, settledCount - 1)
+            listState.animateScrollToItem(targetIndex)
+        }
+    }
 
     if (showCrisisDialog || showLocalCrisisDialog) {
         CrisisSupportDialog(
@@ -77,7 +137,7 @@ fun AIChatScreen(
                     IconButton(onClick = onNavigateToBreathing) {
                         Icon(Icons.Default.Spa, contentDescription = "Calm Breath", tint = MaterialTheme.colorScheme.primary)
                     }
-                    IconButton(onClick = { showLocalCrisisDialog = true }) {
+                    IconButton(onClick = onNavigateToCrisis) {
                         Icon(Icons.Default.Emergency, contentDescription = "Crisis Support", tint = MaterialTheme.colorScheme.error)
                     }
                 },
@@ -85,7 +145,12 @@ fun AIChatScreen(
             )
         },
         bottomBar = {
-            Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .imePadding()
+                    .navigationBarsPadding()
+            ) {
                 // Quota Warning if high
                 if (quotaUsed >= 40) {
                     Surface(
@@ -139,6 +204,7 @@ fun AIChatScreen(
         }
     ) { padding ->
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
@@ -150,7 +216,7 @@ fun AIChatScreen(
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
-            items(messages, key = { it.id }) { message ->
+            items(keyedMessages, key = { it.second }) { (message, _) ->
                 MessageBubble(message = message)
                 Spacer(modifier = Modifier.height(8.dp))
             }
@@ -189,8 +255,14 @@ private fun DisclaimerCard(onCrisisClick: () -> Unit) {
                 )
             }
             Spacer(modifier = Modifier.width(8.dp))
-            TextButton(onClick = onCrisisClick) {
-                Text("Get Help", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+            TextButton(
+                onClick = onCrisisClick,
+                colors = ButtonDefaults.textButtonColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                )
+            ) {
+                Text("Get Help", fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -198,7 +270,7 @@ private fun DisclaimerCard(onCrisisClick: () -> Unit) {
 
 @Composable
 private fun MessageBubble(message: Message) {
-    val isUser = message.senderId != "gemini_ai"
+    val isUser = message.senderId != Message.SENDER_AI
     val alignment = if (isUser) Alignment.End else Alignment.Start
     val containerColor = if (isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer
     val contentColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondaryContainer
@@ -230,7 +302,7 @@ private fun MessageBubble(message: Message) {
                 Text(
                     text = timeString,
                     style = MaterialTheme.typography.labelSmall,
-                    color = contentColor.copy(alpha = 0.7f),
+                    color = contentColor.copy(alpha = 0.90f),
                     modifier = Modifier.align(Alignment.End)
                 )
             }
@@ -243,7 +315,7 @@ private fun TypingIndicatorBubble() {
     Surface(
         color = MaterialTheme.colorScheme.secondaryContainer,
         shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp),
-        modifier = Modifier.widthIn(max = 120.dp)
+        modifier = Modifier.widthIn(max = 140.dp)
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),

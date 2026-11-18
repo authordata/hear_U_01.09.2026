@@ -7,7 +7,7 @@
     <string name="register_btn">Create Account</string>
     <string name="sign_in_tab">Sign In</string>
     <string name="sign_up_tab">Sign Up</string>
-    <string name="email_label">Email Address</string>
+    <string name="email_label">Email</string>
     <string name="password_label">Password</string>
     <string name="confirm_password_label">Confirm Password</string>
     <string name="passwords_mismatch">Passwords do not match</string>
@@ -18,7 +18,7 @@
     <string name="giver_title">I want to listen</string>
     <string name="giver_desc">Provide a compassionate, non-judgmental ear for someone in need</string>
     <string name="ai_companion_title">AI Companion</string>
-    <string name="ai_companion_subtitle">Powered by Gemini 3.7 Flash</string>
+    <string name="ai_companion_subtitle">Powered by Gemini 2.0 Flash</string>
     <string name="find_listener_btn">Find a Compassionate Listener</string>
     <string name="chat_ai_btn">Chat with AI Companion</string>
     <string name="breathing_exercise_btn">4-7-8 Breathing &amp; Grounding</string>
@@ -26,6 +26,9 @@
     <string name="report_user">Report User</string>
     <string name="block_user">Block &amp; Leave</string>
     <string name="back">Back</string>
-    <string name="anonymity_guarantee">100% Confidential &amp; Encrypted. Photos stay blurred until mutual consent.</string>
+    <string name="anonymity_guarantee" formatted="false">100% Confidential Peer Support. Photos stay blurred until mutual consent.</string>
     <string name="privacy_policy">Privacy Policy &amp; 30-Day Auto Purge</string>
+    <string name="forgot_password">Forgot Password?</string>
+    <string name="delete_account">Delete Account &amp; Erase Data</string>
+    <string name="profile_switch_role">Switch Role</string>
 </resources>

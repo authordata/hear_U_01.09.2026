@@ -1,9 +1,21 @@
 package com.hearu.app.ui.emergency
 
+import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -13,15 +25,33 @@ import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Emergency
 import androidx.compose.material.icons.filled.Spa
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,8 +60,11 @@ fun EmergencyScreen(
     onNavigateToBreathing: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("24/7 Crisis & Emergency Hub") },
@@ -52,7 +85,7 @@ fun EmergencyScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Immediate Warning Card
@@ -62,51 +95,59 @@ fun EmergencyScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
-                    modifier = Modifier.padding(20.dp),
+                    modifier = Modifier.padding(14.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Icon(
                         imageVector = Icons.Default.Emergency,
                         contentDescription = "Urgent",
                         tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(48.dp)
+                        modifier = Modifier.size(32.dp)
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = "You Are Not Alone",
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onErrorContainer
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "If you or someone you know is in immediate danger or experiencing thoughts of self-harm, confidential free help is available right now.",
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onErrorContainer
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Resource 1: 988 Suicide & Crisis Lifeline
             EmergencyContactCard(
                 title = "988 Suicide & Crisis Lifeline",
                 description = "Free, 24/7, confidential support for people in distress across the United States & Canada.",
-                phoneAction = "tel:988",
-                smsAction = "sms:988",
                 onCall = {
-                    val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:988"))
-                    context.startActivity(intent)
+                    launchSafeIntent(
+                        context = context,
+                        intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:988")),
+                        fallbackMessage = "No phone app found. Please dial 988 directly.",
+                        snackbarHostState = snackbarHostState,
+                        scope = coroutineScope
+                    )
                 },
                 onText = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("sms:988"))
-                    context.startActivity(intent)
+                    launchSafeIntent(
+                        context = context,
+                        intent = Intent(Intent.ACTION_VIEW, Uri.parse("sms:988")),
+                        fallbackMessage = "No messaging app found. Please text 988 directly.",
+                        snackbarHostState = snackbarHostState,
+                        scope = coroutineScope
+                    )
                 }
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Resource 2: Crisis Text Line
             Card(
@@ -128,10 +169,17 @@ fun EmergencyScreen(
                     Spacer(modifier = Modifier.height(12.dp))
                     Button(
                         onClick = {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("sms:741741?body=HOME"))
-                            context.startActivity(intent)
+                            launchSafeIntent(
+                                context = context,
+                                intent = Intent(Intent.ACTION_VIEW, Uri.parse("sms:741741?body=HOME")),
+                                fallbackMessage = "No messaging app found. Please text HOME to 741741.",
+                                snackbarHostState = snackbarHostState,
+                                scope = coroutineScope
+                            )
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
                     ) {
                         Icon(Icons.AutoMirrored.Filled.Message, contentDescription = null)
                         Spacer(modifier = Modifier.width(6.dp))
@@ -146,17 +194,25 @@ fun EmergencyScreen(
             EmergencyContactCard(
                 title = "Veterans Crisis Line",
                 description = "24/7 confidential crisis support for Veterans, service members, and their loved ones. Dial 988, then press 1, or text 838255.",
-                phoneAction = "tel:988",
-                smsAction = "sms:838255",
                 callText = "Call 988 (Press 1)",
                 smsText = "Text 838255",
                 onCall = {
-                    val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:988"))
-                    context.startActivity(intent)
+                    launchSafeIntent(
+                        context = context,
+                        intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:988")),
+                        fallbackMessage = "No phone app found. Please dial 988 and press 1.",
+                        snackbarHostState = snackbarHostState,
+                        scope = coroutineScope
+                    )
                 },
                 onText = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("sms:838255"))
-                    context.startActivity(intent)
+                    launchSafeIntent(
+                        context = context,
+                        intent = Intent(Intent.ACTION_VIEW, Uri.parse("sms:838255")),
+                        fallbackMessage = "No messaging app found. Please text 838255.",
+                        snackbarHostState = snackbarHostState,
+                        scope = coroutineScope
+                    )
                 }
             )
 
@@ -166,17 +222,25 @@ fun EmergencyScreen(
             EmergencyContactCard(
                 title = "The Trevor Project (LGBTQ+ Youth)",
                 description = "24/7 suicide prevention and crisis intervention for LGBTQ youth.",
-                phoneAction = "tel:18664887386",
-                smsAction = "sms:678678?body=START",
                 callText = "Call Now",
                 smsText = "Text START",
                 onCall = {
-                    val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:18664887386"))
-                    context.startActivity(intent)
+                    launchSafeIntent(
+                        context = context,
+                        intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:18664887386")),
+                        fallbackMessage = "No phone app found. Please dial 1-866-488-7386.",
+                        snackbarHostState = snackbarHostState,
+                        scope = coroutineScope
+                    )
                 },
                 onText = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("sms:678678?body=START"))
-                    context.startActivity(intent)
+                    launchSafeIntent(
+                        context = context,
+                        intent = Intent(Intent.ACTION_VIEW, Uri.parse("sms:678678?body=START")),
+                        fallbackMessage = "No messaging app found. Please text START to 678678.",
+                        snackbarHostState = snackbarHostState,
+                        scope = coroutineScope
+                    )
                 }
             )
 
@@ -202,10 +266,17 @@ fun EmergencyScreen(
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedButton(
                         onClick = {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.befrienders.org/find-support-now/"))
-                            context.startActivity(intent)
+                            launchSafeIntent(
+                                context = context,
+                                intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.befrienders.org/find-support-now/")),
+                                fallbackMessage = "No browser app found. Visit befrienders.org/find-support-now/",
+                                snackbarHostState = snackbarHostState,
+                                scope = coroutineScope
+                            )
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
                     ) {
                         Text("Visit Befrienders Worldwide Directory")
                     }
@@ -219,7 +290,9 @@ fun EmergencyScreen(
                 onClick = onNavigateToBreathing,
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .defaultMinSize(minHeight = 48.dp)
             ) {
                 Icon(Icons.Default.Spa, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
@@ -229,12 +302,26 @@ fun EmergencyScreen(
     }
 }
 
+private fun launchSafeIntent(
+    context: Context,
+    intent: Intent,
+    fallbackMessage: String,
+    snackbarHostState: SnackbarHostState,
+    scope: CoroutineScope
+) {
+    try {
+        context.startActivity(intent)
+    } catch (_: ActivityNotFoundException) {
+        scope.launch {
+            snackbarHostState.showSnackbar(fallbackMessage)
+        }
+    }
+}
+
 @Composable
 private fun EmergencyContactCard(
     title: String,
     description: String,
-    phoneAction: String,
-    smsAction: String,
     callText: String = "Call Now",
     smsText: String = "Text 988",
     onCall: () -> Unit,
@@ -245,11 +332,11 @@ private fun EmergencyContactCard(
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
             Text(text = title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(4.dp))
             Text(text = description, style = MaterialTheme.typography.bodySmall)
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -257,19 +344,35 @@ private fun EmergencyContactCard(
                 Button(
                     onClick = onCall,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                    modifier = Modifier.weight(1f)
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .defaultMinSize(minHeight = 48.dp)
                 ) {
                     Icon(Icons.Default.Call, contentDescription = null)
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(callText)
+                    Text(
+                        text = callText,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
+                    )
                 }
                 OutlinedButton(
                     onClick = onText,
-                    modifier = Modifier.weight(1f)
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .defaultMinSize(minHeight = 48.dp)
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Message, contentDescription = null)
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(smsText)
+                    Text(
+                        text = smsText,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
+                    )
                 }
             }
         }

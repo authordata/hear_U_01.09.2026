@@ -20,4 +20,13 @@ interface MessageDao {
 
     @Query("DELETE FROM cached_messages WHERE sessionId = :sessionId")
     suspend fun clearSession(sessionId: String)
+
+    @Query("DELETE FROM cached_messages WHERE timestamp < :cutoffTimestamp")
+    suspend fun deleteMessagesOlderThan(cutoffTimestamp: Long)
+
+    @Query("DELETE FROM cached_messages")
+    suspend fun clearAll()
+
+    @Query("UPDATE cached_messages SET syncStatus = :syncStatus WHERE id = :messageId")
+    suspend fun updateSyncStatus(messageId: String, syncStatus: String)
 }

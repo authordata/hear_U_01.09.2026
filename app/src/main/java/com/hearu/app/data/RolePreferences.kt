@@ -11,8 +11,9 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import java.time.LocalDate
+import java.time.Clock
 import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -20,7 +21,19 @@ import javax.inject.Singleton
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "user_preferences")
 
 @Singleton
-class RolePreferences @Inject constructor(@ApplicationContext private val context: Context) {
+class RolePreferences internal constructor(
+    private val dataStore: DataStore<Preferences>,
+    private val clock: Clock = Clock.systemDefaultZone(),
+    private val zoneId: ZoneId = ZoneId.systemDefault()
+) {
+    @Inject
+    constructor(@ApplicationContext context: Context) : this(context.dataStore)
+
+    constructor(
+        context: Context,
+        clock: Clock,
+        zoneId: ZoneId
+    ) : this(context.dataStore, clock, zoneId)
 
     private object Keys {
         val ACTIVE_ROLE = stringPreferencesKey("active_role")
@@ -32,55 +45,55 @@ class RolePreferences @Inject constructor(@ApplicationContext private val contex
         val AI_MSG_DATE = longPreferencesKey("ai_msg_date")
     }
 
-    val activeRoleFlow: Flow<String?> = context.dataStore.data.map { prefs ->
+    val activeRoleFlow: Flow<String?> = dataStore.data.map { prefs ->
         prefs[Keys.ACTIVE_ROLE]
     }
 
-    val displayNameFlow: Flow<String> = context.dataStore.data.map { prefs ->
+    val displayNameFlow: Flow<String> = dataStore.data.map { prefs ->
         prefs[Keys.DISPLAY_NAME] ?: "KindSoul"
     }
 
-    val onboardingCompletedFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+    val isOnboardingCompletedFlow: Flow<Boolean> = dataStore.data.map { prefs ->
         prefs[Keys.ONBOARDING_COMPLETED] ?: false
     }
 
-    val isOnboardingCompletedFlow: Flow<Boolean>
-        get() = onboardingCompletedFlow
+    val onboardingCompletedFlow: Flow<Boolean>
+        get() = isOnboardingCompletedFlow
 
-    val isBiometricEnabledFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+    val isBiometricEnabledFlow: Flow<Boolean> = dataStore.data.map { prefs ->
         prefs[Keys.BIOMETRIC_ENABLED] ?: false
     }
 
-    val isDarkThemeFlow: Flow<Boolean?> = context.dataStore.data.map { prefs ->
+    val isDarkThemeFlow: Flow<Boolean?> = dataStore.data.map { prefs ->
         prefs[Keys.DARK_THEME]
     }
 
     suspend fun setActiveRole(role: String) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[Keys.ACTIVE_ROLE] = role
         }
     }
 
     suspend fun setDisplayName(name: String) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[Keys.DISPLAY_NAME] = name
         }
     }
 
     suspend fun setOnboardingCompleted(completed: Boolean) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[Keys.ONBOARDING_COMPLETED] = completed
         }
     }
 
     suspend fun setBiometricEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[Keys.BIOMETRIC_ENABLED] = enabled
         }
     }
 
     suspend fun setDarkTheme(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[Keys.DARK_THEME] = enabled
         }
     }
@@ -92,7 +105,7 @@ class RolePreferences @Inject constructor(@ApplicationContext private val contex
     suspend fun tryConsumeAiQuota(limit: Int = 50): Boolean {
         val currentDay = getStartOfDayEpoch()
         var consumed = false
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             val lastDate = prefs[Keys.AI_MSG_DATE] ?: 0L
             val currentCount = if (lastDate < currentDay) 0 else (prefs[Keys.AI_MSG_COUNT] ?: 0)
             if (currentCount < limit) {
@@ -104,25 +117,36 @@ class RolePreferences @Inject constructor(@ApplicationContext private val contex
         return consumed
     }
 
+    /**
+     * Strictly read-only check of AI messages used today.
+     * Returns 0 if the stored date is from a previous day without mutating DataStore.
+     */
     suspend fun getAiMessagesUsedToday(): Int {
         val currentDay = getStartOfDayEpoch()
-        var count = 0
-        context.dataStore.edit { prefs ->
-            val lastDate = prefs[Keys.AI_MSG_DATE] ?: 0L
-            count = if (lastDate < currentDay) {
-                prefs[Keys.AI_MSG_COUNT] = 0
-                prefs[Keys.AI_MSG_DATE] = currentDay
-                0
-            } else {
-                prefs[Keys.AI_MSG_COUNT] ?: 0
-            }
+        val prefs = dataStore.data.first()
+        val lastDate = prefs[Keys.AI_MSG_DATE] ?: 0L
+        return if (lastDate < currentDay) 0 else (prefs[Keys.AI_MSG_COUNT] ?: 0)
+    }
+
+    suspend fun clearSessionData() {
+        dataStore.edit { prefs ->
+            prefs.remove(Keys.ACTIVE_ROLE)
+            prefs.remove(Keys.DISPLAY_NAME)
+            prefs.remove(Keys.BIOMETRIC_ENABLED)
+            prefs.remove(Keys.AI_MSG_COUNT)
+            prefs.remove(Keys.AI_MSG_DATE)
         }
-        return count
+    }
+
+    suspend fun clearAll() {
+        dataStore.edit { prefs ->
+            prefs.clear()
+        }
     }
 
     private fun getStartOfDayEpoch(): Long {
-        return LocalDate.now(ZoneId.systemDefault())
-            .atStartOfDay(ZoneId.systemDefault())
+        return clock.instant().atZone(zoneId).toLocalDate()
+            .atStartOfDay(zoneId)
             .toInstant()
             .toEpochMilli()
     }

@@ -1,21 +1,35 @@
 package com.hearu.app.ui.onboarding
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.DeleteSweep
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Psychology
-import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -23,9 +37,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.hearu.app.R
 import kotlinx.coroutines.launch
 
 data class OnboardingPage(
@@ -36,7 +54,7 @@ data class OnboardingPage(
     val iconTint: Color
 )
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun OnboardingScreen(
     onFinishOnboarding: () -> Unit
@@ -45,23 +63,23 @@ fun OnboardingScreen(
         OnboardingPage(
             title = "A Safe, Anonymous Haven",
             subtitle = "100% Confidential Peer Support",
-            description = "Connect with empathetic listeners without ever exposing your identity. Photos stay cryptographically blurred until in-chat mutual consent.",
+            description = "Connect with empathetic listeners without ever exposing your identity. Photos stay blurred by default until in-chat mutual consent.",
             icon = Icons.Default.Shield,
-            iconTint = Color(0xFF3F51B5)
+            iconTint = MaterialTheme.colorScheme.primary
         ),
         OnboardingPage(
             title = "24/7 AI Companion & SOS",
-            subtitle = "Powered by Gemini 3.7 Flash",
+            subtitle = stringResource(R.string.ai_companion_subtitle),
             description = "Whenever you need a listening ear at 3 AM, our empathetic AI companion and 4-7-8 Breathing & Grounding Guide are here. Instant 988 Lifeline escalation if needed.",
             icon = Icons.Default.Psychology,
-            iconTint = Color(0xFF009688)
+            iconTint = MaterialTheme.colorScheme.secondary
         ),
         OnboardingPage(
             title = "30-Day Auto Purge Guarantee",
             subtitle = "Your Privacy is Absolute",
             description = "All peer and AI chat transcripts are permanently erased from our servers every 30 days. No data selling. No permanent records.",
             icon = Icons.Default.DeleteSweep,
-            iconTint = Color(0xFFD32F2F)
+            iconTint = MaterialTheme.colorScheme.error
         )
     )
 
@@ -105,6 +123,7 @@ fun OnboardingScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
                         .padding(horizontal = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
@@ -158,7 +177,11 @@ fun OnboardingScreen(
 
             // Dots Indicator
             Row(
-                modifier = Modifier.padding(vertical = 24.dp),
+                modifier = Modifier
+                    .padding(vertical = 24.dp)
+                    .semantics {
+                        contentDescription = "Page ${pagerState.currentPage + 1} of ${pages.size}"
+                    },
                 horizontalArrangement = Arrangement.Center
             ) {
                 repeat(pages.size) { iteration ->
@@ -172,6 +195,10 @@ fun OnboardingScreen(
                                 else MaterialTheme.colorScheme.surfaceVariant
                             )
                             .size(if (isSelected) 10.dp else 8.dp)
+                            .semantics {
+                                contentDescription = "Slide ${iteration + 1} of ${pages.size}" +
+                                    if (isSelected) ", selected" else ""
+                            }
                     )
                 }
             }

@@ -7,6 +7,9 @@ data class User(
     val role: String = "",
     val status: String = "offline",
     val emotionTags: List<String> = emptyList(),
-    val rating: Double = 5.0,
+    val photoUrl: String? = null,
+    val fcmToken: String? = null,
+    val tokenUpdatedAt: Long = 0L,
+    val blockedUsers: List<String> = emptyList(),
     val createdAt: Long = System.currentTimeMillis()
 )
