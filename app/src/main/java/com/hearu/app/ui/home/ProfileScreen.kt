@@ -45,11 +45,13 @@ fun ProfileScreen(
     val coroutineScope = rememberCoroutineScope()
     val biometricHelper = remember { BiometricHelper() }
 
+    val persistedAlias by authViewModel.displayName.collectAsStateWithLifecycle(initialValue = "KindSoul")
+    val isBiometricActive by authViewModel.isBiometricEnabled.collectAsStateWithLifecycle(initialValue = false)
+    val isDarkThemeActive by authViewModel.isDarkTheme.collectAsStateWithLifecycle(initialValue = null)
+
     var showSignOutDialog by rememberSaveable { mutableStateOf(false) }
-    var aliasName by rememberSaveable { mutableStateOf("KindSoul") }
+    var editingAliasText by rememberSaveable { mutableStateOf("") }
     var isEditingAlias by rememberSaveable { mutableStateOf(false) }
-    var biometricEnabled by rememberSaveable { mutableStateOf(false) }
-    var darkThemeEnabled by rememberSaveable { mutableStateOf(false) }
 
     if (showSignOutDialog) {
         AlertDialog(
@@ -121,7 +123,7 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = aliasName,
+                text = persistedAlias,
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -130,8 +132,17 @@ fun ProfileScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Spacer(modifier = Modifier.height(4.dp))
+            TextButton(
+                onClick = {
+                    editingAliasText = persistedAlias
+                    isEditingAlias = true
+                }
+            ) {
+                Text("Change Alias Name")
+            }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Trust & Rating Card
             Card(
@@ -192,24 +203,50 @@ fun ProfileScreen(
                         Text("Require Face ID / Fingerprint on launch", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Switch(
-                        checked = biometricEnabled,
+                        checked = isBiometricActive,
                         onCheckedChange = { enable ->
                             if (enable) {
                                 (context as? FragmentActivity)?.let { activity ->
                                     biometricHelper.showBiometricPrompt(
                                         activity = activity,
                                         onSuccess = {
-                                            biometricEnabled = true
+                                            authViewModel.setBiometricEnabled(true)
                                             Toast.makeText(context, "Biometric security enabled.", Toast.LENGTH_SHORT).show()
                                         },
                                         onError = { error ->
                                             Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
                                         }
                                     )
-                                } ?: run { biometricEnabled = true }
+                                } ?: authViewModel.setBiometricEnabled(true)
                             } else {
-                                biometricEnabled = false
+                                authViewModel.setBiometricEnabled(false)
                             }
+                        }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Dark Theme Toggle Card
+            Card(
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Palette, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Dark Theme", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
+                        Text("Switch between soothing dark and light aesthetics", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(
+                        checked = isDarkThemeActive ?: false,
+                        onCheckedChange = { enable ->
+                            authViewModel.setDarkTheme(enable)
                         }
                     )
                 }
@@ -225,5 +262,47 @@ fun ProfileScreen(
                 Text("Return to Dashboard")
             }
         }
+    }
+
+    if (isEditingAlias) {
+        AlertDialog(
+            onDismissRequest = { isEditingAlias = false },
+            title = { Text("Change Anonymous Alias") },
+            text = {
+                Column {
+                    Text(
+                        "Your alias is visible to peers during listening sessions. It never reveals your real identity.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = editingAliasText,
+                        onValueChange = { editingAliasText = it },
+                        label = { Text("Alias Name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val trimmed = editingAliasText.trim()
+                        if (trimmed.isNotBlank()) {
+                            authViewModel.setDisplayName(trimmed)
+                        }
+                        isEditingAlias = false
+                    }
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { isEditingAlias = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }

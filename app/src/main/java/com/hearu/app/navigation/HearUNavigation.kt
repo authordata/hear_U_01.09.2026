@@ -85,6 +85,9 @@ fun HearUNavigation(
                 },
                 onSignUpSubmit = { email, pass ->
                     authViewModel.register(email, pass)
+                },
+                onAnonymousSubmit = {
+                    authViewModel.signInAnonymously()
                 }
             )
             LaunchedEffect(authState) {

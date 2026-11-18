@@ -20,6 +20,9 @@ class AuthViewModel @Inject constructor(
 
     val activeRole = rolePreferences.activeRoleFlow
     val isOnboardingCompleted = rolePreferences.isOnboardingCompletedFlow
+    val displayName = rolePreferences.displayNameFlow
+    val isBiometricEnabled = rolePreferences.isBiometricEnabledFlow
+    val isDarkTheme = rolePreferences.isDarkThemeFlow
 
     private val _authState = MutableStateFlow<AuthState>(AuthState.Idle)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
@@ -82,6 +85,16 @@ class AuthViewModel @Inject constructor(
         }
     }
 
+    fun signInAnonymously() {
+        viewModelScope.launch {
+            _authState.value = AuthState.Loading
+            when (val result = authRepository.signInAnonymously()) {
+                is com.hearu.app.repository.AuthResult.Success -> _authState.value = AuthState.Authenticated
+                is com.hearu.app.repository.AuthResult.Failure -> _authState.value = AuthState.Error(result.exception.localizedMessage ?: "Anonymous sign-in failed.")
+            }
+        }
+    }
+
     private fun isValidEmail(email: String): Boolean {
         val regex = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$".toRegex()
         return email.isNotBlank() && regex.matches(email)
@@ -96,6 +109,24 @@ class AuthViewModel @Inject constructor(
     fun setOnboardingCompleted(completed: Boolean) {
         viewModelScope.launch {
             rolePreferences.setOnboardingCompleted(completed)
+        }
+    }
+
+    fun setDisplayName(name: String) {
+        viewModelScope.launch {
+            rolePreferences.setDisplayName(name)
+        }
+    }
+
+    fun setBiometricEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            rolePreferences.setBiometricEnabled(enabled)
+        }
+    }
+
+    fun setDarkTheme(enabled: Boolean) {
+        viewModelScope.launch {
+            rolePreferences.setDarkTheme(enabled)
         }
     }
 

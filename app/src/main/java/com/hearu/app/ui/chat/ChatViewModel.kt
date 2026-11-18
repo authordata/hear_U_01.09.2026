@@ -33,6 +33,18 @@ class ChatViewModel @Inject constructor(
     private val _isSending = MutableStateFlow(false)
     val isSending: StateFlow<Boolean> = _isSending.asStateFlow()
 
+    private val _isPhotoRevealed = MutableStateFlow(false)
+    val isPhotoRevealed: StateFlow<Boolean> = _isPhotoRevealed.asStateFlow()
+
+    private val _myPhotoConsent = MutableStateFlow(false)
+    val myPhotoConsent: StateFlow<Boolean> = _myPhotoConsent.asStateFlow()
+
+    fun togglePhotoConsent() {
+        val next = !_myPhotoConsent.value
+        _myPhotoConsent.value = next
+        _isPhotoRevealed.value = next
+    }
+
     private var currentSessionId: String = ""
     private var messageJob: Job? = null
 

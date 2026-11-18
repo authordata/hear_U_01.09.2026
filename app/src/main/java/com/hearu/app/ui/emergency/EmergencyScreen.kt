@@ -142,12 +142,34 @@ fun EmergencyScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Resource 3: The Trevor Project (LGBTQ+ Youth)
+            // Resource 3: Veterans Crisis Line
+            EmergencyContactCard(
+                title = "Veterans Crisis Line",
+                description = "24/7 confidential crisis support for Veterans, service members, and their loved ones. Dial 988, then press 1, or text 838255.",
+                phoneAction = "tel:988",
+                smsAction = "sms:838255",
+                callText = "Call 988 (Press 1)",
+                smsText = "Text 838255",
+                onCall = {
+                    val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:988"))
+                    context.startActivity(intent)
+                },
+                onText = {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("sms:838255"))
+                    context.startActivity(intent)
+                }
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Resource 4: The Trevor Project (LGBTQ+ Youth)
             EmergencyContactCard(
                 title = "The Trevor Project (LGBTQ+ Youth)",
                 description = "24/7 suicide prevention and crisis intervention for LGBTQ youth.",
                 phoneAction = "tel:18664887386",
                 smsAction = "sms:678678?body=START",
+                callText = "Call Now",
+                smsText = "Text START",
                 onCall = {
                     val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:18664887386"))
                     context.startActivity(intent)
@@ -160,7 +182,7 @@ fun EmergencyScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Resource 4: International Resources
+            // Resource 5: International Resources
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                 shape = RoundedCornerShape(16.dp),
@@ -213,6 +235,8 @@ private fun EmergencyContactCard(
     description: String,
     phoneAction: String,
     smsAction: String,
+    callText: String = "Call Now",
+    smsText: String = "Text 988",
     onCall: () -> Unit,
     onText: () -> Unit
 ) {
@@ -237,7 +261,7 @@ private fun EmergencyContactCard(
                 ) {
                     Icon(Icons.Default.Call, contentDescription = null)
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Call Now")
+                    Text(callText)
                 }
                 OutlinedButton(
                     onClick = onText,
@@ -245,7 +269,7 @@ private fun EmergencyContactCard(
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Message, contentDescription = null)
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Text 988")
+                    Text(smsText)
                 }
             }
         }
