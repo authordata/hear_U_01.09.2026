@@ -69,6 +69,7 @@ fun HearUNavigation(
         composable(Screen.Onboarding.route) {
             OnboardingScreen(
                 onFinishOnboarding = {
+                    authViewModel.setOnboardingCompleted(true)
                     navController.navigate(Screen.Login.route) {
                         popUpTo(Screen.Onboarding.route) { inclusive = true }
                     }
@@ -81,6 +82,9 @@ fun HearUNavigation(
                 viewModel = authViewModel,
                 onLoginSubmit = { email, pass ->
                     authViewModel.login(email, pass)
+                },
+                onSignUpSubmit = { email, pass ->
+                    authViewModel.register(email, pass)
                 }
             )
             LaunchedEffect(authState) {

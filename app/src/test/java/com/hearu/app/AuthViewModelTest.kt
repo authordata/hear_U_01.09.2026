@@ -68,4 +68,28 @@ class AuthViewModelTest {
             assertEquals(AuthState.Authenticated, awaitItem())
         }
     }
+
+    @Test
+    fun `register transitions through Loading to Authenticated on valid credentials`() = runTest(testDispatcher) {
+        runBlocking {
+            whenever(authRepository.signUpWithEmail(any<String>(), any<String>()))
+                .thenReturn(AuthResult.Success(mockUser))
+        }
+
+        viewModel.authState.test {
+            assertEquals(AuthState.Idle, awaitItem())
+            viewModel.register("newuser@hearu.app", "Password123!")
+            testDispatcher.scheduler.runCurrent()
+            assertEquals(AuthState.Loading, awaitItem())
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertEquals(AuthState.Authenticated, awaitItem())
+        }
+    }
+
+    @Test
+    fun `register fails immediately with short password`() = runTest(testDispatcher) {
+        viewModel.register("valid@hearu.app", "short")
+        val state = viewModel.authState.value
+        assert(state is AuthState.Error && state.message.contains("at least 8 characters"))
+    }
 }
