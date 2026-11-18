@@ -1,9 +1,21 @@
 package com.hearu.app.model
 
+import androidx.compose.runtime.Immutable
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentId
 import java.util.Date
 
+enum class SessionStatus(val wireValue: String) {
+    ACTIVE("active"),
+    ENDED("ended");
+
+    companion object {
+        fun fromWire(value: String?): SessionStatus =
+            entries.firstOrNull { it.wireValue == value } ?: ENDED
+    }
+}
+
+@Immutable
 data class ChatSession(
     @DocumentId val sessionId: String = "",
     val seekerId: String = "",

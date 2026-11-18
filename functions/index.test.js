@@ -146,6 +146,9 @@ function createInMemoryFirestore() {
                 async get(refOrQuery) {
                     return refOrQuery.get();
                 },
+                async getAll(...refs) {
+                    return Promise.all(refs.map(r => r.get()));
+                },
                 set(ref, data) {
                     pending.push(() => ref.set(data));
                 },
@@ -225,6 +228,21 @@ test("matchSeekerWithGiver rejects unauthenticated calls", async () => {
         () => exported.matchSeekerWithGiver({ tags: [] }, { auth: null }),
         (err) => err instanceof HttpsError && err.code === "unauthenticated"
     );
+});
+
+test("matchSeekerWithGiver enforces App Check when ENFORCE_APP_CHECK is enabled", async () => {
+    const { exported, HttpsError } = loadFunctionsWithMock();
+    const prev = process.env.ENFORCE_APP_CHECK;
+    process.env.ENFORCE_APP_CHECK = "true";
+    try {
+        await assert.rejects(
+            () => exported.matchSeekerWithGiver({ tags: [] }, { auth: { uid: "u1" }, app: null }),
+            (err) => err instanceof HttpsError && err.code === "failed-precondition"
+        );
+    } finally {
+        if (prev === undefined) delete process.env.ENFORCE_APP_CHECK;
+        else process.env.ENFORCE_APP_CHECK = prev;
+    }
 });
 
 test("matchSeekerWithGiver never double-books a 'both' user currently active as seeker", async () => {

@@ -133,6 +133,10 @@ class PlayStoreUiUxRubricE2ETest {
         mockAuth = mock()
         mockUser = mock()
         whenever(mockAuthRepository.currentUser).thenReturn(null)
+        runBlocking {
+            whenever(mockAuthRepository.deleteAccount()).thenReturn(Result.success(Unit))
+            whenever(mockAuthRepository.sendPasswordResetEmail(any())).thenReturn(Result.success(Unit))
+        }
         whenever(mockAuth.currentUser).thenReturn(mockUser)
         whenever(mockUser.uid).thenReturn("rubric_uid_1")
 

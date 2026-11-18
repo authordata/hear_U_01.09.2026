@@ -3,6 +3,8 @@ package com.hearu.app
 import android.content.Intent
 import android.graphics.Color as AndroidColor
 import android.os.Bundle
+import android.util.Log
+import android.view.WindowManager
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -48,6 +50,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.hearu.app.auth.BiometricHelper
@@ -78,7 +83,9 @@ class MainActivity : FragmentActivity() {
     lateinit var chatRepository: ChatRepository
 
     private companion object {
+        private const val TAG = "MainActivity"
         private const val KEY_PENDING_SESSION_ID = "pending_deep_link_session_id"
+        private val SESSION_ID_REGEX = Regex("^[A-Za-z0-9_-]{1,128}$")
     }
 
     private var targetSessionId by mutableStateOf<String?>(null)
@@ -86,12 +93,16 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_SECURE,
+            WindowManager.LayoutParams.FLAG_SECURE
+        )
         targetSessionId = if (savedInstanceState == null) {
             intent?.getStringExtra(HearUNotificationConfig.EXTRA_SESSION_ID)
-                ?.takeIf { it.isNotBlank() }
+                ?.takeIf { SESSION_ID_REGEX.matches(it) }
         } else {
             savedInstanceState.getString(KEY_PENDING_SESSION_ID)
-                ?.takeIf { it.isNotBlank() }
+                ?.takeIf { SESSION_ID_REGEX.matches(it) }
         }
 
         lifecycleScope.launch(Dispatchers.IO) {
@@ -100,12 +111,14 @@ class MainActivity : FragmentActivity() {
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
+                Log.w(TAG, "Failed to purge expired local messages on startup")
             }
             try {
                 purgeExpiredVoiceNoteCacheFiles(cacheDir)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
+                Log.w(TAG, "Failed to purge expired voice note cache files on startup")
             }
         }
 
@@ -131,6 +144,19 @@ class MainActivity : FragmentActivity() {
 
             var isUnlocked by rememberSaveable { mutableStateOf(false) }
             var biometricError by rememberSaveable { mutableStateOf<String?>(null) }
+            val lifecycleOwner = LocalLifecycleOwner.current
+
+            DisposableEffect(lifecycleOwner) {
+                val observer = LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_STOP && !isChangingConfigurations) {
+                        if ((startupState as? AppStartupState.Ready)?.isBiometricEnabled == true) {
+                            isUnlocked = false
+                        }
+                    }
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+            }
 
             HearUTheme(darkTheme = useDarkTheme) {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -233,7 +259,7 @@ class MainActivity : FragmentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         val newSessionId = intent.getStringExtra(HearUNotificationConfig.EXTRA_SESSION_ID)
-        if (!newSessionId.isNullOrBlank()) {
+        if (newSessionId != null && SESSION_ID_REGEX.matches(newSessionId)) {
             targetSessionId = newSessionId
         }
     }

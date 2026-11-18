@@ -54,16 +54,21 @@ fun VoiceNoteBubble(
     onTogglePlay: () -> Unit = {},
     onSeek: (Float) -> Unit = {}
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "WaveformAnimation")
-    val waveScale by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(400),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "WaveHeight"
-    )
+    val waveScale = if (isPlaying) {
+        val infiniteTransition = rememberInfiniteTransition(label = "WaveformAnimation")
+        val animated by infiniteTransition.animateFloat(
+            initialValue = 0.3f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(400),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "WaveHeight"
+        )
+        animated
+    } else {
+        0f
+    }
 
     val safeDuration = durationSeconds.coerceAtLeast(1)
     val clampedProgress = playbackProgress.coerceIn(0f, 1f)

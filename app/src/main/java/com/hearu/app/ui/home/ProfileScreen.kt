@@ -79,7 +79,7 @@ fun ProfileScreen(
     onNavigateBack: () -> Unit,
     authViewModel: AuthViewModel = hiltViewModel(),
     onRoleChanged: (String) -> Unit = {},
-    biometricHelper: BiometricHelper = remember { BiometricHelper() }
+    biometricHelper: BiometricHelper = authViewModel.biometricHelper ?: remember { BiometricHelper() }
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()

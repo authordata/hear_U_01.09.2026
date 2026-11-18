@@ -7,6 +7,8 @@ const MAX_BATCH_SIZE = 400; // Safe under Firestore 500-op limit
 const EXPIRED_SESSION_PAGE_SIZE = 50;
 const GIVER_PAGE_SIZE = 50;
 const MAX_GIVER_PAGES = 10;
+const TX_CANDIDATE_CHUNK_SIZE = 25;
+const MAX_PURGE_RUNTIME_MS = 50 * 1000; // Exit cleanly before 60s v1 function timeout
 
 /**
  * 1. Matching Algorithm — Authenticated, IDOR-safe, block-aware, transactional double-match guard
@@ -14,6 +16,9 @@ const MAX_GIVER_PAGES = 10;
 exports.matchSeekerWithGiver = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
+    }
+    if (process.env.ENFORCE_APP_CHECK === "true" && !context.app) {
+        throw new functions.https.HttpsError("failed-precondition", "App Check verification required.");
     }
     const seekerId = context.auth.uid;
 
@@ -170,37 +175,45 @@ exports.matchSeekerWithGiver = functions.https.onCall(async (data, context) => {
         }
 
         let matchedCandidate = null;
-        for (const candidate of candidates) {
-            const candidateUserRef = db.collection("users").doc(candidate.id);
-            const candidateUserSnap = await tx.get(candidateUserRef);
-            if (!candidateUserSnap.exists) continue;
-            const candidateData = candidateUserSnap.data() || {};
-            if (candidateData.status !== "online") continue;
-            const candidateBlocked = Array.isArray(candidateData.blockedUsers) ? candidateData.blockedUsers : [];
-            if (txSeekerBlocked.has(candidate.id) || candidateBlocked.includes(seekerId)) continue;
+        for (let offset = 0; offset < candidates.length && !matchedCandidate; offset += TX_CANDIDATE_CHUNK_SIZE) {
+            const chunk = candidates.slice(offset, offset + TX_CANDIDATE_CHUNK_SIZE);
+            const chunkRefs = chunk.map(c => db.collection("users").doc(c.id));
+            const chunkSnaps = typeof tx.getAll === "function"
+                ? await tx.getAll(...chunkRefs)
+                : await Promise.all(chunkRefs.map(ref => tx.get(ref)));
 
-            const giverActiveSnap = await tx.get(
-                db.collection("sessions")
-                    .where("giverId", "==", candidate.id)
-                    .where("status", "==", "active")
-                    .limit(1)
-            );
-            if (!giverActiveSnap.empty) continue;
+            for (let i = 0; i < chunk.length; i++) {
+                const candidate = chunk[i];
+                const candidateUserSnap = chunkSnaps[i];
+                if (!candidateUserSnap || !candidateUserSnap.exists) continue;
+                const candidateData = candidateUserSnap.data() || {};
+                if (candidateData.status !== "online") continue;
+                const candidateBlocked = Array.isArray(candidateData.blockedUsers) ? candidateData.blockedUsers : [];
+                if (txSeekerBlocked.has(candidate.id) || candidateBlocked.includes(seekerId)) continue;
 
-            // Prevent double-booking "both" users who are currently active as seekers
-            const candidateActiveSeekerSnap = await tx.get(
-                db.collection("sessions")
-                    .where("seekerId", "==", candidate.id)
-                    .where("status", "==", "active")
-                    .limit(1)
-            );
-            if (!candidateActiveSeekerSnap.empty) continue;
+                // Check active sessions as giver or seeker concurrently inside transaction
+                const [giverActiveSnap, candidateActiveSeekerSnap] = await Promise.all([
+                    tx.get(
+                        db.collection("sessions")
+                            .where("giverId", "==", candidate.id)
+                            .where("status", "==", "active")
+                            .limit(1)
+                    ),
+                    tx.get(
+                        db.collection("sessions")
+                            .where("seekerId", "==", candidate.id)
+                            .where("status", "==", "active")
+                            .limit(1)
+                    )
+                ]);
+                if (!giverActiveSnap.empty || !candidateActiveSeekerSnap.empty) continue;
 
-            matchedCandidate = {
-                id: candidate.id,
-                displayName: candidateData.displayName || candidate.displayName
-            };
-            break;
+                matchedCandidate = {
+                    id: candidate.id,
+                    displayName: candidateData.displayName || candidate.displayName
+                };
+                break;
+            }
         }
 
         // All tx.get(...) reads are complete; perform transactional writes now
@@ -239,14 +252,15 @@ exports.matchSeekerWithGiver = functions.https.onCall(async (data, context) => {
  * 2. 30-Day Auto-Delete — Paginated loop with chunked batches under 500-op Firestore limit
  */
 exports.purgeExpiredChats = functions.pubsub.schedule("every 24 hours").onRun(async () => {
+    const startMs = Date.now();
     const thirtyDaysAgo = admin.firestore.Timestamp.fromMillis(
-        Date.now() - (30 * 24 * 60 * 60 * 1000)
+        startMs - (30 * 24 * 60 * 60 * 1000)
     );
 
     let totalSessionsPurged = 0;
     let totalDocsDeleted = 0;
 
-    while (true) {
+    while (Date.now() - startMs < MAX_PURGE_RUNTIME_MS) {
         const expiredSessions = await db.collection("sessions")
             .where("createdAt", "<=", thirtyDaysAgo)
             .limit(EXPIRED_SESSION_PAGE_SIZE)
@@ -257,6 +271,9 @@ exports.purgeExpiredChats = functions.pubsub.schedule("every 24 hours").onRun(as
         }
 
         for (const sessionDoc of expiredSessions.docs) {
+            if (Date.now() - startMs >= MAX_PURGE_RUNTIME_MS) {
+                break;
+            }
             // Paginate message subcollection deletion to avoid unbounded memory usage
             while (true) {
                 const msgSnap = await sessionDoc.ref

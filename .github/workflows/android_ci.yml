@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ "main" ]
 
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build & Test HearU
@@ -24,13 +27,14 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Bootstrap Gradle Wrapper
+      - name: Bootstrap & Verify Gradle Wrapper
         run: |
           mkdir -p gradle/wrapper
           if [ ! -s gradle/wrapper/gradle-wrapper.jar ]; then
             echo "Fetching official Gradle 8.7 wrapper jar..."
-            curl -sSL "https://raw.githubusercontent.com/gradle/gradle/v8.7.0/gradle/wrapper/gradle-wrapper.jar" -o gradle/wrapper/gradle-wrapper.jar
+            curl -fsSL "https://services.gradle.org/distributions/gradle-8.7-wrapper.jar" -o gradle/wrapper/gradle-wrapper.jar
           fi
+          echo "cb0da6751c2b753a16ac168bb354870ebb1e162e9083f116729cec9c781156b8  gradle/wrapper/gradle-wrapper.jar" | sha256sum -c -
           chmod +x gradlew
 
       - name: Run Unit Tests

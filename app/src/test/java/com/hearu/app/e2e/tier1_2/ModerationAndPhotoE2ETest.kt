@@ -97,6 +97,7 @@ class ModerationAndPhotoE2ETest {
         whenever(mockChatRepository.getMessages(any())).thenReturn(flowOf(emptyList()))
         runBlocking {
             whenever(mockChatRepository.sendMessage(any(), any())).thenReturn(Unit)
+            whenever(mockChatRepository.updatePhotoConsent(any(), any(), any())).thenReturn(false)
         }
 
         whenever(mockFirestore.collection("reports")).thenReturn(mockReportsCollection)
@@ -149,7 +150,7 @@ class ModerationAndPhotoE2ETest {
 
         assertFalse(vm.isPhotoRevealed.value)
         assertFalse(vm.myPhotoConsent.value)
-        composeTestRule.onNodeWithText("End-to-end ephemeral peer chat").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Confidential 30-day ephemeral peer chat").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Peer Avatar").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Photo Reveal Consent").assertIsDisplayed()
         composeTestRule.onNodeWithText("Photos unblurred (mutual consent)").assertDoesNotExist()
@@ -260,7 +261,7 @@ class ModerationAndPhotoE2ETest {
 
         assertFalse(vm.myPhotoConsent.value)
         assertFalse(vm.isPhotoRevealed.value)
-        composeTestRule.onNodeWithText("End-to-end ephemeral peer chat").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Confidential 30-day ephemeral peer chat").assertIsDisplayed()
     }
 
     @Test

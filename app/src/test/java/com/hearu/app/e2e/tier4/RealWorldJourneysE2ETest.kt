@@ -186,6 +186,10 @@ class RealWorldJourneysE2ETest {
         mockAuth = mock()
         mockUser = mock()
         whenever(mockAuthRepository.currentUser).thenReturn(null)
+        runBlocking {
+            whenever(mockAuthRepository.deleteAccount()).thenReturn(Result.success(Unit))
+            whenever(mockAuthRepository.sendPasswordResetEmail(any())).thenReturn(Result.success(Unit))
+        }
         whenever(mockAuth.currentUser).thenReturn(mockUser)
         whenever(mockUser.uid).thenReturn("uid_journey_1")
 
@@ -642,7 +646,7 @@ class RealWorldJourneysE2ETest {
             drainAsync()
 
             // 5. Photo Blur + Unilateral Consent
-            composeTestRule.onNodeWithText("End-to-end ephemeral peer chat").assertIsDisplayed()
+            composeTestRule.onNodeWithText("Confidential 30-day ephemeral peer chat").assertIsDisplayed()
             composeTestRule.onNodeWithContentDescription("Photo Reveal Consent").performClick()
             composeTestRule.onNodeWithText("Grant Mutual Consent").performClick()
             drainAsync()
@@ -877,6 +881,11 @@ class RealWorldJourneysE2ETest {
             val count = confirmButtons.fetchSemanticsNodes().size
             assertTrue("Delete confirmation button must exist", count > 0)
             confirmButtons[count - 1].performClick()
+            composeTestRule.waitUntil(timeoutMillis = 5_000L) {
+                drainAsync()
+                !profileVm.isDeletingAccount.value &&
+                    runBlocking { !rolePreferences.isBiometricEnabledFlow.first() }
+            }
             drainAsync()
 
             assertFalse(runBlocking { rolePreferences.isBiometricEnabledFlow.first() })

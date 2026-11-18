@@ -5,6 +5,7 @@ import app.cash.turbine.test
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.CollectionReference
@@ -295,5 +296,33 @@ class AuthViewModelTest {
 
         assertFalse(successCalled)
         assertEquals("repo failure", errorMessage)
+    }
+
+    @Test
+    fun `login and sendPasswordReset prevent email enumeration on FirebaseAuthInvalidUserException`() = runTest(testDispatcher) {
+        val missingUserEx = mock<FirebaseAuthInvalidUserException>()
+        runBlocking {
+            whenever(authRepository.signInWithEmail(any(), any()))
+                .thenReturn(AuthResult.Failure(missingUserEx))
+            whenever(authRepository.sendPasswordResetEmail("unknown@hearu.app"))
+                .thenReturn(Result.failure(missingUserEx))
+        }
+
+        viewModel.login("unknown@hearu.app", "Password123!")
+        testDispatcher.scheduler.advanceUntilIdle()
+        val loginError = (viewModel.authState.value as AuthState.Error).message
+        assertFalse("Login error must not reveal account existence", loginError.contains("No account found"))
+        assertTrue(loginError.contains("Incorrect email or password"))
+
+        var resetSucceeded = false
+        var resetError: String? = null
+        viewModel.sendPasswordReset(
+            email = "unknown@hearu.app",
+            onSuccess = { resetSucceeded = true },
+            onError = { resetError = it }
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertTrue("Password reset on unknown email must report generic success to prevent enumeration", resetSucceeded)
+        assertEquals(null, resetError)
     }
 }

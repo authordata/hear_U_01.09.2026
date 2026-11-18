@@ -93,9 +93,13 @@ import com.hearu.app.ui.chat.components.VoiceRecordBar
 import com.hearu.app.ui.dialogs.CrisisSupportDialog
 import com.hearu.app.ui.dialogs.ReportUserDialog
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
+
+private val CHAT_TIME_FORMATTER: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("h:mm a", Locale.getDefault())
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -116,9 +120,6 @@ fun ChatScreen(
     val errorState by viewModel.errorState.collectAsStateWithLifecycle()
     val isPhotoRevealed by viewModel.isPhotoRevealed.collectAsStateWithLifecycle()
     val myPhotoConsent by viewModel.myPhotoConsent.collectAsStateWithLifecycle()
-    val isRecording by viewModel.isRecording.collectAsStateWithLifecycle()
-    val recordingDuration by viewModel.recordingDuration.collectAsStateWithLifecycle()
-    val liveAmplitudes by viewModel.liveAmplitudes.collectAsStateWithLifecycle()
     val playingMessageId by viewModel.playingMessageId.collectAsStateWithLifecycle()
     val playbackProgress by viewModel.playbackProgress.collectAsStateWithLifecycle()
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
@@ -300,7 +301,7 @@ fun ChatScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = if (isPhotoRevealed) "Photos unblurred (mutual consent)" else "End-to-end ephemeral peer chat",
+                                text = if (isPhotoRevealed) "Photos unblurred (mutual consent)" else "Confidential 30-day ephemeral peer chat",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -386,98 +387,15 @@ fun ChatScreen(
             )
         },
         bottomBar = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .imePadding()
-                    .navigationBarsPadding()
-                    .background(MaterialTheme.colorScheme.surface)
-                    .padding(8.dp)
-            ) {
-                // Quick Empathy Suggestion Reactions
-                LazyRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    val reactions = listOf("❤️", "🫂", "🙏", "🌸", "✨")
-                    items(reactions) { emoji ->
-                        AssistChip(
-                            onClick = { viewModel.sendMessage(emoji) },
-                            label = { Text(emoji) }
-                        )
-                    }
+            ChatBottomInputSection(
+                inputText = inputText,
+                onInputTextChanged = { inputText = it },
+                isSending = isSending,
+                viewModel = viewModel,
+                onRequestAudioPermission = {
+                    audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                 }
-
-                // Voice Recording Live Bar
-                if (isRecording) {
-                    VoiceRecordBar(
-                        isRecording = isRecording,
-                        recordingDurationSec = recordingDuration,
-                        liveAmplitudes = liveAmplitudes,
-                        onStartRecording = {
-                            viewModel.startVoiceRecording(context, context.cacheDir)
-                        },
-                        onStopRecording = {
-                            viewModel.stopAndSendVoiceRecording()
-                        },
-                        onCancelRecording = {
-                            viewModel.cancelVoiceRecording()
-                        }
-                    )
-                } else {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(
-                            value = inputText,
-                            onValueChange = { inputText = it },
-                            modifier = Modifier.weight(1f),
-                            placeholder = { Text("Share with compassion...") },
-                            maxLines = 4
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        if (inputText.isBlank()) {
-                            IconButton(
-                                onClick = {
-                                    val granted = ContextCompat.checkSelfPermission(
-                                        context,
-                                        Manifest.permission.RECORD_AUDIO
-                                    ) == PackageManager.PERMISSION_GRANTED
-                                    if (granted) {
-                                        viewModel.startVoiceRecording(context, context.cacheDir)
-                                    } else {
-                                        audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                                    }
-                                },
-                                colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-                            ) {
-                                Icon(
-                                    Icons.Default.Mic,
-                                    contentDescription = "Record Voice Note",
-                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
-                            }
-                        } else {
-                            IconButton(
-                                onClick = {
-                                    if (inputText.isNotBlank()) {
-                                        viewModel.sendMessage(inputText)
-                                        inputText = ""
-                                    }
-                                },
-                                enabled = !isSending,
-                                colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.primary)
-                            ) {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.Send,
-                                    contentDescription = "Send",
-                                    tint = MaterialTheme.colorScheme.onPrimary
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+            )
         }
     ) { paddingValues ->
         if (messages.isEmpty()) {
@@ -544,6 +462,115 @@ fun ChatScreen(
 }
 
 @Composable
+private fun ChatBottomInputSection(
+    inputText: String,
+    onInputTextChanged: (String) -> Unit,
+    isSending: Boolean,
+    viewModel: ChatViewModel,
+    onRequestAudioPermission: () -> Unit
+) {
+    val context = LocalContext.current
+    val isRecording by viewModel.isRecording.collectAsStateWithLifecycle()
+    val recordingDuration by viewModel.recordingDuration.collectAsStateWithLifecycle()
+    val liveAmplitudes by viewModel.liveAmplitudes.collectAsStateWithLifecycle()
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .imePadding()
+            .navigationBarsPadding()
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(8.dp)
+    ) {
+        val reactions = remember { listOf("❤️", "🫂", "🙏", "🌸", "✨") }
+        LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(reactions) { emoji ->
+                AssistChip(
+                    onClick = { viewModel.sendMessage(emoji) },
+                    label = { Text(emoji) }
+                )
+            }
+        }
+
+        if (isRecording) {
+            VoiceRecordBar(
+                isRecording = isRecording,
+                recordingDurationSec = recordingDuration,
+                liveAmplitudes = liveAmplitudes,
+                onStartRecording = {
+                    viewModel.startVoiceRecording(context, context.cacheDir)
+                },
+                onStopRecording = {
+                    viewModel.stopAndSendVoiceRecording()
+                },
+                onCancelRecording = {
+                    viewModel.cancelVoiceRecording()
+                }
+            )
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = inputText,
+                    onValueChange = onInputTextChanged,
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("Share with compassion...") },
+                    maxLines = 4
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                if (inputText.isBlank()) {
+                    IconButton(
+                        onClick = {
+                            val granted = ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.RECORD_AUDIO
+                            ) == PackageManager.PERMISSION_GRANTED
+                            if (granted) {
+                                viewModel.startVoiceRecording(context, context.cacheDir)
+                            } else {
+                                onRequestAudioPermission()
+                            }
+                        },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                        )
+                    ) {
+                        Icon(
+                            Icons.Default.Mic,
+                            contentDescription = "Record Voice Note",
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                } else {
+                    IconButton(
+                        onClick = {
+                            if (inputText.isNotBlank()) {
+                                viewModel.sendMessage(inputText)
+                                onInputTextChanged("")
+                            }
+                        },
+                        enabled = !isSending,
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.Send,
+                            contentDescription = "Send",
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun ChatMessageItem(
     message: Message,
     isMine: Boolean,
@@ -576,8 +603,9 @@ fun ChatMessageItem(
     }
 
     val formattedTime = remember(message.timestamp) {
-        val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
-        sdf.format(Date(message.timestamp))
+        Instant.ofEpochMilli(message.timestamp)
+            .atZone(ZoneId.systemDefault())
+            .format(CHAT_TIME_FORMATTER)
     }
 
     Row(

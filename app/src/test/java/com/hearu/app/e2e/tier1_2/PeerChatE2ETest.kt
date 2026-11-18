@@ -193,7 +193,7 @@ class PeerChatE2ETest {
         drainAsync()
 
         composeTestRule.onNodeWithText("Empathetic Listener").assertIsDisplayed()
-        composeTestRule.onNodeWithText("End-to-end ephemeral peer chat").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Confidential 30-day ephemeral peer chat").assertIsDisplayed()
         composeTestRule.onNodeWithText("Your Safe Space is Connected").assertIsDisplayed()
         composeTestRule.onNodeWithText("30 days", substring = true).assertIsDisplayed()
         listOf("❤️", "🫂", "🙏", "🌸", "✨").forEach { emoji ->

@@ -58,9 +58,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hearu.app.model.Message
 import com.hearu.app.ui.dialogs.CrisisSupportDialog
 import kotlinx.coroutines.flow.first
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
+
+private val AI_CHAT_TIME_FORMATTER: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("h:mm a", Locale.getDefault())
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -297,8 +301,11 @@ private fun MessageBubble(message: Message) {
                     color = contentColor
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                val timeFormat = remember { SimpleDateFormat("h:mm a", Locale.getDefault()) }
-                val timeString = remember(message.timestamp) { timeFormat.format(Date(message.timestamp)) }
+                val timeString = remember(message.timestamp) {
+                    Instant.ofEpochMilli(message.timestamp)
+                        .atZone(ZoneId.systemDefault())
+                        .format(AI_CHAT_TIME_FORMATTER)
+                }
                 Text(
                     text = timeString,
                     style = MaterialTheme.typography.labelSmall,

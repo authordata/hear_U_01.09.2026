@@ -11,10 +11,12 @@ build/
 local.properties
 *_payload.json
 
-# Release signing secrets
+# Release signing secrets & environment-specific Firebase configs
 keystore.properties
 *.jks
 *.keystore
+app/src/debug/google-services.json
+app/src/release/google-services.json
 
 # Firebase CLI & Functions dependencies
 functions/node_modules/

@@ -1,6 +1,7 @@
 package com.hearu.app.ui.chat
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
@@ -27,14 +28,12 @@ import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 
 @HiltViewModel
-class ChatViewModel private constructor(
-    private val chatRepository: ChatRepository,
-    private val auth: FirebaseAuth,
-    val voiceNoteManager: VoiceNoteManager,
-    private val moderationRepository: ModerationRepository?,
-    private val rolePreferences: RolePreferences?,
-    @Suppress("UNUSED_PARAMETER") internalMarker: Boolean
-) : ViewModel() {
+class ChatViewModel : ViewModel {
+    private val chatRepository: ChatRepository
+    private val auth: FirebaseAuth
+    val voiceNoteManager: VoiceNoteManager
+    private val moderationRepository: ModerationRepository?
+    private val rolePreferences: RolePreferences?
 
     @Inject
     constructor(
@@ -43,27 +42,27 @@ class ChatViewModel private constructor(
         voiceNoteManager: VoiceNoteManager,
         moderationRepository: ModerationRepository,
         rolePreferences: RolePreferences
-    ) : this(
-        chatRepository,
-        auth,
-        voiceNoteManager,
-        moderationRepository,
-        rolePreferences,
-        true
-    )
+    ) : super() {
+        this.chatRepository = chatRepository
+        this.auth = auth
+        this.voiceNoteManager = voiceNoteManager
+        this.moderationRepository = moderationRepository
+        this.rolePreferences = rolePreferences
+    }
 
+    @JvmOverloads
     constructor(
         chatRepository: ChatRepository,
         auth: FirebaseAuth,
         voiceNoteManager: VoiceNoteManager,
-        moderationRepository: ModerationRepository?
-    ) : this(chatRepository, auth, voiceNoteManager, moderationRepository, null, false)
-
-    constructor(
-        chatRepository: ChatRepository,
-        auth: FirebaseAuth,
-        voiceNoteManager: VoiceNoteManager
-    ) : this(chatRepository, auth, voiceNoteManager, null, null, false)
+        moderationRepository: ModerationRepository? = null
+    ) : super() {
+        this.chatRepository = chatRepository
+        this.auth = auth
+        this.voiceNoteManager = voiceNoteManager
+        this.moderationRepository = moderationRepository
+        this.rolePreferences = null
+    }
 
     private val _messages = MutableStateFlow<List<Message>>(emptyList())
     val messages: StateFlow<List<Message>> = _messages.asStateFlow()
@@ -91,12 +90,18 @@ class ChatViewModel private constructor(
     private var consentJob: Job? = null
     private val inFlightSendCount = AtomicInteger(0)
 
-    val isRecording = voiceNoteManager.isRecording
-    val recordingDuration = voiceNoteManager.recordingDuration
-    val liveAmplitudes = voiceNoteManager.liveAmplitudes
-    val playingMessageId = voiceNoteManager.playingMessageId
-    val playbackProgress = voiceNoteManager.playbackProgress
-    val isPlaying = voiceNoteManager.isPlaying
+    val isRecording: StateFlow<Boolean>
+        get() = voiceNoteManager.isRecording
+    val recordingDuration: StateFlow<Int>
+        get() = voiceNoteManager.recordingDuration
+    val liveAmplitudes: StateFlow<List<Int>>
+        get() = voiceNoteManager.liveAmplitudes
+    val playingMessageId: StateFlow<String?>
+        get() = voiceNoteManager.playingMessageId
+    val playbackProgress: StateFlow<Float>
+        get() = voiceNoteManager.playbackProgress
+    val isPlaying: StateFlow<Boolean>
+        get() = voiceNoteManager.isPlaying
 
     fun joinSession(sessionId: String, userId: String) {
         if (userId.isNotBlank() && userId != currentUserId) {
@@ -135,7 +140,7 @@ class ChatViewModel private constructor(
         if (sessionFlow != null) {
             sessionJob = viewModelScope.launch {
                 sessionFlow
-                    .catch { /* Keep local state if session observer is unavailable */ }
+                    .catch { Log.w(TAG, "Session observer unavailable for active session") }
                     .collect { session ->
                         if (session != null) {
                             observedSession = session
@@ -175,15 +180,6 @@ class ChatViewModel private constructor(
                 throw e
             } catch (e: FirebaseFirestoreException) {
                 if (currentSessionId == sessionId) {
-                    _myPhotoConsent.value = !next
-                    _errorState.value = "Failed to update photo consent: ${e.message}"
-                }
-            } catch (e: NullPointerException) {
-                val topFrame = e.stackTrace.firstOrNull()
-                val isUnstubbedMockitoBoolean =
-                    topFrame?.className?.startsWith("com.hearu.app.ui.chat.ChatViewModel") == true &&
-                        e.message?.contains("Boolean.booleanValue") == true
-                if (!isUnstubbedMockitoBoolean && currentSessionId == sessionId) {
                     _myPhotoConsent.value = !next
                     _errorState.value = "Failed to update photo consent: ${e.message}"
                 }
@@ -385,6 +381,7 @@ class ChatViewModel private constructor(
                     } catch (e: CancellationException) {
                         throw e
                     } catch (_: Exception) {
+                        Log.w(TAG, "Best-effort session status end failed during blockAndLeave")
                     }
                     chatRepository.stopFirestoreSync(sessionId)
                 }
@@ -432,5 +429,9 @@ class ChatViewModel private constructor(
         voiceNoteManager.cancelRecording()
         voiceNoteManager.stopPlayback()
         voiceNoteManager.cleanup()
+    }
+
+    companion object {
+        private const val TAG = "ChatViewModel"
     }
 }

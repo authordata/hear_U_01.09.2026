@@ -1,6 +1,7 @@
 package com.hearu.app.ui.auth
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.FirebaseNetworkException
@@ -10,6 +11,7 @@ import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.FirebaseAuthWeakPasswordException
+import com.hearu.app.auth.BiometricHelper
 import com.hearu.app.data.RolePreferences
 import com.hearu.app.data.local.dao.MessageDao
 import com.hearu.app.repository.AuthRepository
@@ -27,7 +29,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -46,14 +47,13 @@ sealed interface AppStartupState {
 }
 
 @HiltViewModel
-class AuthViewModel private constructor(
-    private val authRepository: AuthRepository,
-    private val rolePreferences: RolePreferences,
-    private val messageDao: MessageDao?,
-    private val appContext: Context?,
-    private val userRepository: UserRepository?,
-    @Suppress("UNUSED_PARAMETER") internalMarker: Boolean
-) : ViewModel() {
+class AuthViewModel : ViewModel {
+    private val authRepository: AuthRepository
+    private val rolePreferences: RolePreferences
+    private val messageDao: MessageDao?
+    private val appContext: Context?
+    private val userRepository: UserRepository?
+    internal val biometricHelper: BiometricHelper?
 
     @Inject
     constructor(
@@ -61,26 +61,72 @@ class AuthViewModel private constructor(
         rolePreferences: RolePreferences,
         messageDao: MessageDao,
         @ApplicationContext appContext: Context,
+        userRepository: UserRepository,
+        biometricHelper: BiometricHelper
+    ) : super() {
+        this.authRepository = authRepository
+        this.rolePreferences = rolePreferences
+        this.messageDao = messageDao
+        this.appContext = appContext
+        this.userRepository = userRepository
+        this.biometricHelper = biometricHelper
+        checkCurrentUser()
+    }
+
+    constructor(
+        authRepository: AuthRepository,
+        rolePreferences: RolePreferences,
+        messageDao: MessageDao,
+        appContext: Context,
         userRepository: UserRepository
-    ) : this(authRepository, rolePreferences, messageDao, appContext, userRepository, true)
+    ) : super() {
+        this.authRepository = authRepository
+        this.rolePreferences = rolePreferences
+        this.messageDao = messageDao
+        this.appContext = appContext
+        this.userRepository = userRepository
+        this.biometricHelper = null
+        checkCurrentUser()
+    }
 
     constructor(
         authRepository: AuthRepository,
         rolePreferences: RolePreferences,
         messageDao: MessageDao,
         appContext: Context
-    ) : this(authRepository, rolePreferences, messageDao, appContext, null, false)
+    ) : super() {
+        this.authRepository = authRepository
+        this.rolePreferences = rolePreferences
+        this.messageDao = messageDao
+        this.appContext = appContext
+        this.userRepository = null
+        this.biometricHelper = null
+        checkCurrentUser()
+    }
 
     constructor(
         authRepository: AuthRepository,
         rolePreferences: RolePreferences
-    ) : this(authRepository, rolePreferences, null, null, null, false)
+    ) : super() {
+        this.authRepository = authRepository
+        this.rolePreferences = rolePreferences
+        this.messageDao = null
+        this.appContext = null
+        this.userRepository = null
+        this.biometricHelper = null
+        checkCurrentUser()
+    }
 
-    val activeRole = rolePreferences.activeRoleFlow
-    val isOnboardingCompleted = rolePreferences.isOnboardingCompletedFlow
-    val displayName = rolePreferences.displayNameFlow
-    val isBiometricEnabled = rolePreferences.isBiometricEnabledFlow
-    val isDarkTheme = rolePreferences.isDarkThemeFlow
+    val activeRole: kotlinx.coroutines.flow.Flow<String?>
+        get() = rolePreferences.activeRoleFlow
+    val isOnboardingCompleted: kotlinx.coroutines.flow.Flow<Boolean>
+        get() = rolePreferences.isOnboardingCompletedFlow
+    val displayName: kotlinx.coroutines.flow.Flow<String>
+        get() = rolePreferences.displayNameFlow
+    val isBiometricEnabled: kotlinx.coroutines.flow.Flow<Boolean>
+        get() = rolePreferences.isBiometricEnabledFlow
+    val isDarkTheme: kotlinx.coroutines.flow.Flow<Boolean?>
+        get() = rolePreferences.isDarkThemeFlow
 
     private val _authState = MutableStateFlow<AuthState>(AuthState.Idle)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
@@ -94,16 +140,11 @@ class AuthViewModel private constructor(
         get() = authRepository.currentUser?.uid
 
     val startupState: StateFlow<AppStartupState> by lazy {
-        val onboardingFlow = rolePreferences.isOnboardingCompletedFlow ?: flowOf(false)
-        val roleFlow = rolePreferences.activeRoleFlow ?: flowOf(null)
-        val biometricFlow = rolePreferences.isBiometricEnabledFlow ?: flowOf(false)
-        val darkThemeFlow = rolePreferences.isDarkThemeFlow ?: flowOf(null)
-
         combine(
-            onboardingFlow,
-            roleFlow,
-            biometricFlow,
-            darkThemeFlow,
+            rolePreferences.isOnboardingCompletedFlow,
+            rolePreferences.activeRoleFlow,
+            rolePreferences.isBiometricEnabledFlow,
+            rolePreferences.isDarkThemeFlow,
             _authState
         ) { onboardingDone, role, biometric, darkTheme, auth ->
             AppStartupState.Ready(
@@ -118,10 +159,6 @@ class AuthViewModel private constructor(
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = AppStartupState.Loading
         )
-    }
-
-    init {
-        checkCurrentUser()
     }
 
     private fun checkCurrentUser() {
@@ -214,21 +251,20 @@ class AuthViewModel private constructor(
         }
         viewModelScope.launch {
             try {
-                val result = try {
-                    authRepository.sendPasswordResetEmail(trimmedEmail)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: NullPointerException) {
-                    if (isUnstubbedMockitoResultNpe(e)) Result.success(Unit) else Result.failure(e)
-                }
+                val result = authRepository.sendPasswordResetEmail(trimmedEmail)
                 if (result.isSuccess) {
                     onSuccess()
                 } else {
                     val err = result.exceptionOrNull()
-                    onError(
-                        err?.let { mapAuthError(it, "Unable to send password reset email.") }
-                            ?: "Unable to send password reset email."
-                    )
+                    if (err is FirebaseAuthInvalidUserException) {
+                        // Prevent email enumeration on password reset
+                        onSuccess()
+                    } else {
+                        onError(
+                            err?.let { mapAuthError(it, "Unable to send password reset email.") }
+                                ?: "Unable to send password reset email."
+                        )
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -238,25 +274,17 @@ class AuthViewModel private constructor(
         }
     }
 
-    private fun isUnstubbedMockitoResultNpe(e: NullPointerException): Boolean {
-        val topFrame = e.stackTrace.firstOrNull() ?: return false
-        return topFrame.className.startsWith("com.hearu.app.ui.auth.AuthViewModel") &&
-            e.message?.contains("Result.unbox-impl") == true
-    }
-
     private fun isValidEmail(email: String): Boolean {
-        val regex = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$".toRegex()
-        return email.isNotBlank() && regex.matches(email)
+        return email.isNotBlank() && EMAIL_REGEX.matches(email)
     }
 
     private fun mapAuthError(throwable: Throwable, fallback: String): String {
         return when (throwable) {
-            is FirebaseAuthInvalidCredentialsException ->
-                "Incorrect email or password. Please check your credentials and try again."
+            is FirebaseAuthInvalidCredentialsException,
             is FirebaseAuthInvalidUserException ->
-                "No account found for this email address."
+                "Incorrect email or password. Please check your credentials and try again."
             is FirebaseAuthUserCollisionException ->
-                "An account with this email already exists."
+                "Unable to complete registration with these credentials. Try signing in instead."
             is FirebaseAuthWeakPasswordException ->
                 "Password is too weak. Please choose a stronger password."
             is FirebaseNetworkException ->
@@ -264,6 +292,28 @@ class AuthViewModel private constructor(
             is FirebaseTooManyRequestsException ->
                 "Too many attempts. Please wait a moment before trying again."
             else -> throwable.localizedMessage?.takeIf { it.isNotBlank() } ?: fallback
+        }
+    }
+
+    fun confirmAgeVerified() {
+        viewModelScope.launch {
+            try {
+                rolePreferences.setAgeVerified(true)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                Log.w(TAG, "Failed to persist age verification preference")
+            }
+            val uid = currentUserId
+            if (!uid.isNullOrBlank()) {
+                try {
+                    userRepository?.updateAgeVerified(uid, true)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    Log.w(TAG, "Failed to sync age verification to Firestore")
+                }
+            }
         }
     }
 
@@ -280,6 +330,7 @@ class AuthViewModel private constructor(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (_: Exception) {
+                    Log.w(TAG, "Failed to sync role update to Firestore")
                 }
             }
         }
@@ -302,6 +353,7 @@ class AuthViewModel private constructor(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (_: Exception) {
+                    Log.w(TAG, "Failed to sync display name to Firestore")
                 }
             }
         }
@@ -337,10 +389,12 @@ class AuthViewModel private constructor(
                     } catch (e: CancellationException) {
                         throw e
                     } catch (_: Exception) {
+                        Log.w(TAG, "Failed to set user status offline before sign-out")
                     } finally {
                         try {
                             authRepository.signOut()
                         } catch (_: Exception) {
+                            Log.w(TAG, "Firebase signOut threw during cleanup")
                         }
                     }
                 }
@@ -354,6 +408,7 @@ class AuthViewModel private constructor(
                         } catch (e: CancellationException) {
                             throw e
                         } catch (_: Exception) {
+                            Log.w(TAG, "Failed to clear session preferences on sign-out")
                         }
                     }
                 }
@@ -375,8 +430,8 @@ class AuthViewModel private constructor(
                     authRepository.deleteAccount()
                 } catch (e: CancellationException) {
                     throw e
-                } catch (e: NullPointerException) {
-                    if (isUnstubbedMockitoResultNpe(e)) Result.success(Unit) else Result.failure(e)
+                } catch (e: Exception) {
+                    Result.failure(e)
                 }
 
                 if (result.isSuccess) {
@@ -391,6 +446,7 @@ class AuthViewModel private constructor(
                                 } catch (e: CancellationException) {
                                     throw e
                                 } catch (_: Exception) {
+                                    Log.w(TAG, "Failed to clear preferences on account deletion")
                                 }
                             }
                         }
@@ -424,6 +480,7 @@ class AuthViewModel private constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
+            Log.w(TAG, "Failed to clear Room message cache")
         }
         try {
             appContext?.cacheDir?.listFiles { _, name ->
@@ -432,6 +489,7 @@ class AuthViewModel private constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
+            Log.w(TAG, "Failed to clear voice note cache files")
         }
     }
 
@@ -440,7 +498,9 @@ class AuthViewModel private constructor(
     }
 
     companion object {
+        private const val TAG = "AuthViewModel"
         private val ALLOWED_SYNC_ROLES = setOf("seeker", "giver", "both")
+        private val EMAIL_REGEX = Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
     }
 }
 

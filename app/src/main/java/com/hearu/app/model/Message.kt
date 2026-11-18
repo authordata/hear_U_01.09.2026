@@ -1,8 +1,10 @@
 package com.hearu.app.model
 
+import androidx.compose.runtime.Immutable
 import com.google.firebase.firestore.DocumentId
 import com.google.firebase.firestore.PropertyName
 
+@Immutable
 data class Message(
     @DocumentId val id: String = "",
     val senderId: String = "",

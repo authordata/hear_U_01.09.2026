@@ -126,13 +126,14 @@ class RolePreferencesTest {
     }
 
     @Test
-    fun `clearSessionData clears session keys while preserving onboarding and dark theme`() = runTest {
+    fun `clearSessionData clears session keys while preserving onboarding dark theme and daily AI quota`() = runTest {
         val (prefs, _) = createPreferences()
 
         prefs.setActiveRole("seeker")
         prefs.setDisplayName("CalmRiver")
         prefs.setOnboardingCompleted(true)
         prefs.setBiometricEnabled(true)
+        prefs.setAgeVerified(true)
         prefs.setDarkTheme(false)
         assertTrue(prefs.tryConsumeAiQuota(50))
 
@@ -141,8 +142,9 @@ class RolePreferencesTest {
         assertNull(prefs.activeRoleFlow.first())
         assertEquals("KindSoul", prefs.displayNameFlow.first())
         assertFalse(prefs.isBiometricEnabledFlow.first())
-        assertEquals(0, prefs.getAiMessagesUsedToday())
-        // Preserved app-level preferences
+        assertFalse(prefs.isAgeVerifiedFlow.first())
+        // Preserved app-level & anti-abuse preferences across sign-outs
+        assertEquals(1, prefs.getAiMessagesUsedToday())
         assertTrue(prefs.isOnboardingCompletedFlow.first())
         assertEquals(false, prefs.isDarkThemeFlow.first())
     }

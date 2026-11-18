@@ -7,12 +7,14 @@ import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.firestore.CollectionReference
+import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.EventListener
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.QueryDocumentSnapshot
 import com.google.firebase.firestore.QuerySnapshot
 import com.google.firebase.firestore.Transaction
 import com.hearu.app.data.local.AppDatabase
@@ -27,6 +29,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -79,6 +82,7 @@ class ChatRepositoryTest {
         whenever(mockMessagesCollection.document()).thenReturn(mockDocRef)
         whenever(mockDocRef.id).thenReturn("msg_100")
         whenever(mockMessagesCollection.orderBy("timestamp", Query.Direction.ASCENDING)).thenReturn(mockQuery)
+        whenever(mockQuery.limitToLast(any())).thenReturn(mockQuery)
         whenever(mockQuery.addSnapshotListener(any())).thenAnswer { inv ->
             @Suppress("UNCHECKED_CAST")
             capturedListener = inv.getArgument(0) as EventListener<QuerySnapshot>
@@ -135,11 +139,13 @@ class ChatRepositoryTest {
         assertEquals(600, sent.audioDurationSec)
         assertEquals(600, sent.voiceDurationSeconds)
         assertEquals(64, sent.waveformAmplitudes.size)
+        assertNull("Local filesystem path must never be uploaded to Firestore", sent.audioUrl)
         assertFalse(sent.isSystemMessage)
 
         val stored = messageDao.getMessagesForSession("s1").first()
         assertEquals(1, stored.size)
         assertEquals(MessageEntity.SYNC_SENT, stored[0].syncStatus)
+        assertEquals("/tmp/audio.m4a", stored[0].audioUrl)
         assertEquals(64, stored[0].waveformAmplitudes.size)
     }
 
@@ -272,5 +278,40 @@ class ChatRepositoryTest {
             caught = true
         }
         assertTrue(caught)
+    }
+
+    @Test
+    fun `getMessages processes incremental documentChanges without re-deserializing unchanged documents`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val repo = ChatRepository(mockFirestore, messageDao, dispatcher)
+
+        repo.getMessages("s_inc").test {
+            testScheduler.advanceUntilIdle()
+            assertEquals(emptyList<Message>(), awaitItem())
+
+            val unchangedDoc: QueryDocumentSnapshot = mock()
+            val addedDoc: QueryDocumentSnapshot = mock()
+            whenever(addedDoc.id).thenReturn("inc_msg_2")
+            whenever(addedDoc.toObject(Message::class.java)).thenReturn(
+                Message(id = "inc_msg_2", senderId = "peer_1", text = "Incremental message", timestamp = 2000L)
+            )
+            val docChange: DocumentChange = mock()
+            whenever(docChange.type).thenReturn(DocumentChange.Type.ADDED)
+            whenever(docChange.document).thenReturn(addedDoc)
+
+            val mockSnapshot: QuerySnapshot = mock()
+            whenever(mockSnapshot.documentChanges).thenReturn(listOf(docChange))
+            whenever(mockSnapshot.documents).thenReturn(listOf(unchangedDoc, addedDoc))
+
+            capturedListener?.onEvent(mockSnapshot, null)
+            testScheduler.advanceUntilIdle()
+
+            val updated = awaitItem()
+            assertEquals(1, updated.size)
+            assertEquals("Incremental message", updated[0].text)
+            verify(unchangedDoc, never()).toObject(Message::class.java)
+
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 }

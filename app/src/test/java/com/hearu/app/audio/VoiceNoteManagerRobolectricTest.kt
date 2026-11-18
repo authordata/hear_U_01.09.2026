@@ -162,4 +162,21 @@ class VoiceNoteManagerRobolectricTest {
         assertTrue(manager.isPlaying.value)
         assertTrue(manager.playbackProgress.value > 0f)
     }
+
+    @Test
+    fun `togglePlayback rejects untrusted remote domains cleartext schemes and non-m4a local paths`() {
+        val blockedInputs = listOf(
+            "http://cdn.hearu.app/cleartext.m4a",
+            "https://evil-tracker.example/leak_ip.m4a",
+            "/data/user/0/com.hearu.app/databases/hearu_local.db",
+            "/data/user/0/com.hearu.app/files/datastore/user_preferences.preferences_pb",
+            "/tmp/../etc/passwd.m4a"
+        )
+        blockedInputs.forEach { badSource ->
+            manager.togglePlayback("msg_untrusted", badSource, 5)
+            testDispatcher.scheduler.runCurrent()
+            assertFalse("Untrusted source '$badSource' must be rejected", manager.isPlaying.value)
+            assertNull("playingMessageId must stay null for '$badSource'", manager.playingMessageId.value)
+        }
+    }
 }

@@ -1,5 +1,6 @@
 package com.hearu.app.repository
 
+import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
@@ -47,17 +48,28 @@ class ChatRepository @Inject constructor(
             return@callbackFlow
         }
 
-        val registration = firestore.collection("sessions")
+        val orderedQuery = firestore.collection("sessions")
             .document(sessionId)
             .collection("messages")
             .orderBy("timestamp", Query.Direction.ASCENDING)
+        val boundedQuery = orderedQuery.limitToLast(MAX_SYNCED_MESSAGES) ?: orderedQuery
+
+        val registration = boundedQuery
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     close(error)
                     return@addSnapshotListener
                 }
                 if (snapshot == null) return@addSnapshotListener
-                val entities = snapshot.documents.mapNotNull { doc ->
+                val changes = snapshot.documentChanges
+                val changedDocs = when {
+                    changes.isNotEmpty() -> changes.mapNotNull { change ->
+                        if (change.type == DocumentChange.Type.REMOVED) null else change.document
+                    }
+                    snapshot.documents.isNotEmpty() -> snapshot.documents
+                    else -> emptyList()
+                }
+                val entities = changedDocs.mapNotNull { doc ->
                     val msg = doc.toObject(Message::class.java) ?: return@mapNotNull null
                     msg.toEntity(
                         id = doc.id,
@@ -65,8 +77,10 @@ class ChatRepository @Inject constructor(
                         syncStatus = MessageEntity.SYNC_SENT
                     )
                 }
-                launch(ioDispatcher) {
-                    messageDao.insertMessages(entities)
+                if (entities.isNotEmpty()) {
+                    launch(ioDispatcher) {
+                        messageDao.insertMessages(entities)
+                    }
                 }
             }
 
@@ -101,6 +115,31 @@ class ChatRepository @Inject constructor(
                     return@addSnapshotListener
                 }
                 trySend(snapshot?.toObject(ChatSession::class.java))
+            }
+
+        awaitClose {
+            registration.remove()
+        }
+    }
+
+    fun observeActiveGiverSession(giverId: String): Flow<ChatSession?> = callbackFlow {
+        if (giverId.isBlank()) {
+            trySend(null)
+            close()
+            return@callbackFlow
+        }
+
+        val registration = firestore.collection("sessions")
+            .whereEqualTo("giverId", giverId)
+            .whereEqualTo("status", "active")
+            .limit(1)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                val firstDoc = snapshot?.documents?.firstOrNull()
+                trySend(firstDoc?.toObject(ChatSession::class.java))
             }
 
         awaitClose {
@@ -155,7 +194,7 @@ class ChatRepository @Inject constructor(
             waveformAmplitudes = clampedAmplitudes
         )
 
-        // Optimistic local insert with PENDING status (Room = SSOT)
+        // Optimistic local insert with PENDING status (Room = SSOT; retains local .m4a path for sender playback)
         messageDao.insertMessage(
             sanitizedMessage.toEntity(
                 id = sanitizedMessage.id,
@@ -164,8 +203,12 @@ class ChatRepository @Inject constructor(
             )
         )
 
+        // Never transmit local device filesystem paths to Firestore
+        val remoteAudioUrl = clampedAudioUrl?.takeIf { isTrustedRemoteAudioUrl(it) }
+        val remoteMessage = sanitizedMessage.copy(audioUrl = remoteAudioUrl)
+
         try {
-            docRef.set(sanitizedMessage).await()
+            docRef.set(remoteMessage).await()
             messageDao.updateSyncStatus(sanitizedMessage.id, MessageEntity.SYNC_SENT)
         } catch (e: CancellationException) {
             throw e
@@ -238,6 +281,15 @@ class ChatRepository @Inject constructor(
 
     companion object {
         private const val MILLIS_PER_DAY = 24L * 60L * 60L * 1000L
+        private const val MAX_SYNCED_MESSAGES = 200L
+        private val TRUSTED_AUDIO_PREFIXES = listOf(
+            "https://firebasestorage.googleapis.com/",
+            "https://storage.googleapis.com/",
+            "https://cdn.hearu.app/"
+        )
+
+        internal fun isTrustedRemoteAudioUrl(url: String): Boolean =
+            TRUSTED_AUDIO_PREFIXES.any { url.startsWith(it) }
     }
 }
 

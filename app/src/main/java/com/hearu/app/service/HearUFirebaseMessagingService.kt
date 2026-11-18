@@ -62,8 +62,8 @@ class HearUFirebaseMessagingService : FirebaseMessagingService() {
                     Log.d(TAG, "FCM token synced")
                 } catch (e: CancellationException) {
                     throw e
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to sync FCM token to Firestore: ${e.message}", e)
+                } catch (_: Exception) {
+                    Log.e(TAG, "Failed to sync FCM token to Firestore")
                 }
             }
         }

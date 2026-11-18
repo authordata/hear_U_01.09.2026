@@ -41,6 +41,7 @@ class RolePreferences internal constructor(
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         val BIOMETRIC_ENABLED = booleanPreferencesKey("biometric_enabled")
         val DARK_THEME = booleanPreferencesKey("dark_theme")
+        val AGE_VERIFIED = booleanPreferencesKey("age_verified")
         val AI_MSG_COUNT = intPreferencesKey("ai_msg_count")
         val AI_MSG_DATE = longPreferencesKey("ai_msg_date")
     }
@@ -66,6 +67,10 @@ class RolePreferences internal constructor(
 
     val isDarkThemeFlow: Flow<Boolean?> = dataStore.data.map { prefs ->
         prefs[Keys.DARK_THEME]
+    }
+
+    val isAgeVerifiedFlow: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[Keys.AGE_VERIFIED] ?: false
     }
 
     suspend fun setActiveRole(role: String) {
@@ -95,6 +100,12 @@ class RolePreferences internal constructor(
     suspend fun setDarkTheme(enabled: Boolean) {
         dataStore.edit { prefs ->
             prefs[Keys.DARK_THEME] = enabled
+        }
+    }
+
+    suspend fun setAgeVerified(verified: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[Keys.AGE_VERIFIED] = verified
         }
     }
 
@@ -133,8 +144,8 @@ class RolePreferences internal constructor(
             prefs.remove(Keys.ACTIVE_ROLE)
             prefs.remove(Keys.DISPLAY_NAME)
             prefs.remove(Keys.BIOMETRIC_ENABLED)
-            prefs.remove(Keys.AI_MSG_COUNT)
-            prefs.remove(Keys.AI_MSG_DATE)
+            prefs.remove(Keys.AGE_VERIFIED)
+            // Preserve AI_MSG_COUNT and AI_MSG_DATE across sign-outs to prevent quota-reset abuse
         }
     }
 

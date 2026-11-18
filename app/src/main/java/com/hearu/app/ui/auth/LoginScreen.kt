@@ -89,8 +89,14 @@ fun LoginScreen(
     val authState by viewModel.authState.collectAsStateWithLifecycle()
     LoginScreenContent(
         onLoginSubmit = onLoginSubmit,
-        onSignUpSubmit = onSignUpSubmit,
-        onAnonymousSubmit = onAnonymousSubmit,
+        onSignUpSubmit = { email, pass ->
+            viewModel.confirmAgeVerified()
+            onSignUpSubmit(email, pass)
+        },
+        onAnonymousSubmit = {
+            viewModel.confirmAgeVerified()
+            onAnonymousSubmit()
+        },
         onPasswordResetSubmit = { email, onSuccess, onError ->
             viewModel.sendPasswordReset(email, onSuccess, onError)
         },
@@ -112,10 +118,10 @@ fun LoginScreenContent(
 ) {
     var authMode by rememberSaveable { mutableStateOf(initialMode) }
     var email by rememberSaveable { mutableStateOf("") }
-    var password by rememberSaveable { mutableStateOf("") }
-    var confirmPassword by rememberSaveable { mutableStateOf("") }
-    var passwordVisible by rememberSaveable { mutableStateOf(false) }
-    var confirmPasswordVisible by rememberSaveable { mutableStateOf(false) }
+    var password by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+    var confirmPasswordVisible by remember { mutableStateOf(false) }
     var isAgeConfirmed by rememberSaveable { mutableStateOf(false) }
     var showAgeGateDialog by rememberSaveable { mutableStateOf(false) }
     var showForgotPasswordDialog by rememberSaveable { mutableStateOf(false) }

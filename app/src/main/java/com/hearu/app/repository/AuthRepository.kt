@@ -151,6 +151,7 @@ class AuthRepository @Inject constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
+            android.util.Log.w("AuthRepository", "Best-effort user document restoration failed")
         }
     }
 

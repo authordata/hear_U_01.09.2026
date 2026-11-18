@@ -40,8 +40,6 @@ class AIChatViewModel @Inject constructor(
     private val _quotaUsed = MutableStateFlow(0)
     val quotaUsed: StateFlow<Int> = _quotaUsed.asStateFlow()
 
-    val MESSAGE_LIMIT = 50
-
     private val messageIdCounter = AtomicLong(0L)
     private var refreshQuotaJob: Job? = null
 
@@ -163,5 +161,9 @@ class AIChatViewModel @Inject constructor(
                 _isLoading.value = false
             }
         }
+    }
+
+    companion object {
+        const val MESSAGE_LIMIT = 50
     }
 }

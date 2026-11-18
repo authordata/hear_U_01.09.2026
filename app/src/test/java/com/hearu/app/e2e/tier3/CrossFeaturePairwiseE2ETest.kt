@@ -182,6 +182,10 @@ class CrossFeaturePairwiseE2ETest {
         mockAuth = mock()
         mockUser = mock()
         whenever(mockAuthRepository.currentUser).thenReturn(null)
+        runBlocking {
+            whenever(mockAuthRepository.deleteAccount()).thenReturn(Result.success(Unit))
+            whenever(mockAuthRepository.sendPasswordResetEmail(any())).thenReturn(Result.success(Unit))
+        }
         whenever(mockAuth.currentUser).thenReturn(mockUser)
         whenever(mockUser.uid).thenReturn("uid_default_1")
 
@@ -611,7 +615,7 @@ class CrossFeaturePairwiseE2ETest {
             composeTestRule.onNodeWithText("Accept & Connect Anonymously").performScrollTo().performClick()
             drainAsync()
 
-            composeTestRule.onNodeWithText("End-to-end ephemeral peer chat").assertIsDisplayed()
+            composeTestRule.onNodeWithText("Confidential 30-day ephemeral peer chat").assertIsDisplayed()
             assertFalse(chatVm.isPhotoRevealed.value)
 
             composeTestRule.onNodeWithContentDescription("Photo Reveal Consent").performClick()
@@ -623,7 +627,7 @@ class CrossFeaturePairwiseE2ETest {
                 "Unilateral photo consent must NOT unblur photos without peer consent",
                 chatVm.isPhotoRevealed.value
             )
-            composeTestRule.onNodeWithText("End-to-end ephemeral peer chat").assertIsDisplayed()
+            composeTestRule.onNodeWithText("Confidential 30-day ephemeral peer chat").assertIsDisplayed()
         }
     }
 
@@ -1660,6 +1664,11 @@ class CrossFeaturePairwiseE2ETest {
             ).let { nodes ->
                 val count = nodes.fetchSemanticsNodes().size
                 nodes[count - 1].performClick()
+            }
+            composeTestRule.waitUntil(timeoutMillis = 5_000L) {
+                drainAsync()
+                !authVm.isDeletingAccount.value &&
+                    runBlocking { rolePreferences.activeRoleFlow.first() == null }
             }
             drainAsync()
 

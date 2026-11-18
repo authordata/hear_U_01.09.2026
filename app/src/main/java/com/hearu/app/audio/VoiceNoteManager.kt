@@ -68,6 +68,7 @@ class VoiceNoteManager @Inject constructor(
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
 
     private val recordedAmplitudes = mutableListOf<Int>()
+    private val liveWindow = ArrayDeque<Int>(LIVE_AMPLITUDE_WINDOW)
 
     fun startRecording(context: Context, outputDir: File): Boolean {
         stopPlayback()
@@ -88,6 +89,7 @@ class VoiceNoteManager @Inject constructor(
         }
 
         recordedAmplitudes.clear()
+        liveWindow.clear()
         _liveAmplitudes.value = emptyList()
         _recordingDuration.value = 0
 
@@ -106,6 +108,7 @@ class VoiceNoteManager @Inject constructor(
                 setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
                 setAudioSamplingRate(44100)
                 setAudioEncodingBitRate(96000)
+                setMaxDuration(MAX_RECORDING_DURATION_MS)
                 setOutputFile(file.absolutePath)
                 prepare()
                 start()
@@ -113,8 +116,8 @@ class VoiceNoteManager @Inject constructor(
             mediaRecorder = recorder
             currentOutputFile = file
             _isRecording.value = true
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to start MediaRecorder: ${e.message}")
+        } catch (_: Exception) {
+            Log.e(TAG, "Failed to start MediaRecorder")
             try {
                 recorder?.release()
             } catch (_: Exception) {
@@ -128,7 +131,7 @@ class VoiceNoteManager @Inject constructor(
 
         recordingJob = managerScope.launch {
             var elapsedMs = 0
-            while (_isRecording.value) {
+            while (_isRecording.value && elapsedMs < MAX_RECORDING_DURATION_MS) {
                 delay(100)
                 elapsedMs += 100
                 _recordingDuration.value = elapsedMs / 1000
@@ -141,12 +144,21 @@ class VoiceNoteManager @Inject constructor(
                     Random.nextInt(20, 85)
                 }
 
-                recordedAmplitudes.add(amp)
-                _liveAmplitudes.value = if (recordedAmplitudes.size > 30) {
-                    recordedAmplitudes.takeLast(30)
-                } else {
-                    recordedAmplitudes.toList()
+                if (recordedAmplitudes.size >= MAX_CAPTURED_AMPLITUDES) {
+                    // Downsample in-place by keeping every second sample to bound memory O(1) amortized
+                    var writeIdx = 0
+                    for (readIdx in recordedAmplitudes.indices step 2) {
+                        recordedAmplitudes[writeIdx++] = recordedAmplitudes[readIdx]
+                    }
+                    recordedAmplitudes.subList(writeIdx, recordedAmplitudes.size).clear()
                 }
+                recordedAmplitudes.add(amp)
+
+                if (liveWindow.size >= LIVE_AMPLITUDE_WINDOW) {
+                    liveWindow.removeFirst()
+                }
+                liveWindow.addLast(amp)
+                _liveAmplitudes.value = liveWindow.toList()
             }
         }
 
@@ -168,8 +180,8 @@ class VoiceNoteManager @Inject constructor(
         val recorder = mediaRecorder
         try {
             recorder?.stop()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error stopping MediaRecorder: ${e.message}")
+        } catch (_: Exception) {
+            Log.e(TAG, "Error stopping MediaRecorder")
         } finally {
             try {
                 recorder?.release()
@@ -196,8 +208,8 @@ class VoiceNoteManager @Inject constructor(
         val recorder = mediaRecorder
         try {
             recorder?.stop()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error stopping MediaRecorder on cancel: ${e.message}")
+        } catch (_: Exception) {
+            Log.e(TAG, "Error stopping MediaRecorder on cancel")
         } finally {
             try {
                 recorder?.reset()
@@ -213,6 +225,7 @@ class VoiceNoteManager @Inject constructor(
         currentOutputFile = null
 
         recordedAmplitudes.clear()
+        liveWindow.clear()
         _isRecording.value = false
         _recordingDuration.value = 0
         _liveAmplitudes.value = emptyList()
@@ -228,8 +241,23 @@ class VoiceNoteManager @Inject constructor(
         }
     }
 
+    internal fun isAllowedAudioSource(source: String): Boolean {
+        if (source.contains("://")) {
+            return TRUSTED_REMOTE_PREFIXES.any { source.startsWith(it) }
+        }
+        if (source.contains("..")) return false
+        val normalized = source.replace('\\', '/')
+        if (FORBIDDEN_LOCAL_SEGMENTS.any { normalized.contains(it) }) return false
+        return normalized.endsWith(".m4a", ignoreCase = true)
+    }
+
     private fun startPlayback(messageId: String, audioPathOrUrl: String?, durationSec: Int) {
         stopPlayback()
+
+        if (!audioPathOrUrl.isNullOrBlank() && !isAllowedAudioSource(audioPathOrUrl)) {
+            Log.w(TAG, "Rejected untrusted audio source")
+            return
+        }
 
         _playingMessageId.value = messageId
         _isPlaying.value = true
@@ -241,9 +269,15 @@ class VoiceNoteManager @Inject constructor(
             return
         }
 
+        val isRemoteUrl = audioPathOrUrl.contains("://")
+
         playbackPrepareJob = managerScope.launch {
-            val isLocalFile = withContext(ioDispatcher) {
-                File(audioPathOrUrl).exists()
+            val isExistingLocalFile = !isRemoteUrl && withContext(ioDispatcher) {
+                val f = File(audioPathOrUrl)
+                f.exists() && f.isFile
+            }
+            if (!isRemoteUrl && !isExistingLocalFile) {
+                return@launch
             }
             if (_playingMessageId.value != messageId) return@launch
 
@@ -271,14 +305,14 @@ class VoiceNoteManager @Inject constructor(
                 if (_isPlaying.value) {
                     try {
                         mp.start()
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Could not start prepared MediaPlayer: ${e.message}")
+                    } catch (_: Exception) {
+                        Log.w(TAG, "Could not start prepared MediaPlayer")
                     }
                 }
             }
 
             try {
-                if (isLocalFile) {
+                if (isExistingLocalFile) {
                     withContext(ioDispatcher) {
                         player.setDataSource(audioPathOrUrl)
                         player.prepare()
@@ -308,8 +342,8 @@ class VoiceNoteManager @Inject constructor(
                     isPlayerPrepared = false
                 }
                 throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "Could not prepare audio playback: ${e.message}")
+            } catch (_: Exception) {
+                Log.w(TAG, "Could not prepare audio playback")
                 if (mediaPlayer === player) {
                     stopPlayback()
                 } else {
@@ -326,6 +360,7 @@ class VoiceNoteManager @Inject constructor(
             try {
                 mediaPlayer?.pause()
             } catch (_: Exception) {
+                Log.w(TAG, "Failed to pause MediaPlayer")
             }
         }
     }
@@ -336,6 +371,7 @@ class VoiceNoteManager @Inject constructor(
             try {
                 mediaPlayer?.start()
             } catch (_: Exception) {
+                Log.w(TAG, "Failed to resume MediaPlayer")
             }
         }
         startPlaybackProgressTracking(durationSec)
@@ -343,14 +379,26 @@ class VoiceNoteManager @Inject constructor(
 
     private fun startPlaybackProgressTracking(durationSec: Int) {
         playbackJob?.cancel()
-        val totalMs = (durationSec.coerceAtLeast(1) * 1000).toLong()
+        val fallbackTotalMs = (durationSec.coerceAtLeast(1) * 1000).toLong()
 
         playbackJob = managerScope.launch {
-            var currentMs = (_playbackProgress.value * totalMs).toLong()
-            while (_isPlaying.value && currentMs < totalMs) {
+            var currentMs = (_playbackProgress.value * fallbackTotalMs).toLong()
+            while (_isPlaying.value && currentMs < fallbackTotalMs) {
                 delay(100)
+                val player = mediaPlayer
+                if (isPlayerPrepared && player != null) {
+                    val actualDuration = runCatching { player.duration }.getOrDefault(0)
+                    val actualPos = runCatching { player.currentPosition }.getOrDefault(-1)
+                    if (actualDuration > 0 && actualPos > 0) {
+                        _playbackProgress.value =
+                            (actualPos.toFloat() / actualDuration.toFloat()).coerceIn(0f, 1f)
+                        currentMs = actualPos.toLong() * fallbackTotalMs / actualDuration.toLong()
+                        continue
+                    }
+                }
                 currentMs += 100
-                _playbackProgress.value = (currentMs.toFloat() / totalMs.toFloat()).coerceIn(0f, 1f)
+                _playbackProgress.value =
+                    (currentMs.toFloat() / fallbackTotalMs.toFloat()).coerceIn(0f, 1f)
             }
             if (_isPlaying.value) {
                 stopPlayback()
@@ -432,6 +480,19 @@ class VoiceNoteManager @Inject constructor(
 
     companion object {
         private const val TAG = "VoiceNoteManager"
+        private const val LIVE_AMPLITUDE_WINDOW = 30
+        private const val MAX_CAPTURED_AMPLITUDES = 1_800
+        private const val MAX_RECORDING_DURATION_MS = 600 * 1_000
+        private val TRUSTED_REMOTE_PREFIXES = listOf(
+            "https://firebasestorage.googleapis.com/",
+            "https://storage.googleapis.com/",
+            "https://cdn.hearu.app/"
+        )
+        private val FORBIDDEN_LOCAL_SEGMENTS = listOf(
+            "/databases/",
+            "/datastore/",
+            "/shared_prefs/"
+        )
     }
 }
 

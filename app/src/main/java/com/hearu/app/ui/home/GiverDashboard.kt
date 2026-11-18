@@ -51,7 +51,9 @@ import androidx.compose.ui.unit.dp
 fun GiverDashboard(
     onNavigateToChat: (sessionId: String, userId: String) -> Unit = { _, _ -> },
     onNavigateToProfile: () -> Unit = {},
-    onAvailabilityChanged: (Boolean) -> Unit = {}
+    onAvailabilityChanged: (Boolean) -> Unit = {},
+    activeSessionId: String? = null,
+    activeSeekerId: String? = null
 ) {
     var isOnline by rememberSaveable { mutableStateOf(true) }
     var showGuidelines by rememberSaveable { mutableStateOf(false) }
@@ -228,7 +230,7 @@ fun GiverDashboard(
                                     color = MaterialTheme.colorScheme.secondaryContainer
                                 ) {
                                     Text(
-                                        text = "Simulated",
+                                        text = if (!activeSessionId.isNullOrBlank()) "Live Match" else "Simulated",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
@@ -243,8 +245,11 @@ fun GiverDashboard(
                             Spacer(modifier = Modifier.height(12.dp))
                             Button(
                                 onClick = {
-                                    val demoSessionId = "session_${System.currentTimeMillis()}"
-                                    onNavigateToChat(demoSessionId, "anonymous_seeker")
+                                    val resolvedSessionId = activeSessionId?.takeIf { it.isNotBlank() }
+                                        ?: "session_${System.currentTimeMillis()}"
+                                    val resolvedSeekerId = activeSeekerId?.takeIf { it.isNotBlank() }
+                                        ?: "anonymous_seeker"
+                                    onNavigateToChat(resolvedSessionId, resolvedSeekerId)
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(12.dp)

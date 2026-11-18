@@ -60,6 +60,11 @@ class UserRepository @Inject constructor(
         updateFieldWithNotFoundFallback(uid, "role", role)
     }
 
+    suspend fun updateAgeVerified(uid: String, verified: Boolean) {
+        require(uid.isNotBlank()) { "User uid cannot be blank." }
+        updateFieldWithNotFoundFallback(uid, "ageVerified", verified)
+    }
+
     suspend fun updateFcmToken(uid: String, token: String) {
         require(uid.isNotBlank()) { "User uid cannot be blank." }
         require(token.length <= 512) { "FCM token must be at most 512 characters." }

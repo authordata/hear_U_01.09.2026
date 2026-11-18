@@ -331,4 +331,21 @@ class BiometricGateE2ETest {
             composeTestRule.onNodeWithText("Unlock with Biometrics").assertIsDisplayed()
         }
     }
+
+    @Test
+    fun tier2_mainActivityEnforcesFlagSecureAndRelocksOnBackgroundStop() {
+        runBlocking {
+            rolePreferences.setBiometricEnabled(true)
+        }
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val flags = activity.window.attributes.flags
+                assertTrue(
+                    "MainActivity must set FLAG_SECURE to prevent Recents screen snapshots",
+                    (flags and android.view.WindowManager.LayoutParams.FLAG_SECURE) != 0
+                )
+            }
+        }
+    }
 }

@@ -1,5 +1,8 @@
 package com.hearu.app.navigation
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.net.Uri
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,7 +13,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -23,7 +25,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.hearu.app.repository.UserRepository
 import com.hearu.app.ui.auth.AppStartupState
 import com.hearu.app.ui.auth.AuthState
 import com.hearu.app.ui.auth.AuthViewModel
@@ -33,21 +34,19 @@ import com.hearu.app.ui.chat.AIChatScreen
 import com.hearu.app.ui.chat.ChatScreen
 import com.hearu.app.ui.emergency.EmergencyScreen
 import com.hearu.app.ui.home.GiverDashboard
+import com.hearu.app.ui.home.GiverViewModel
 import com.hearu.app.ui.home.ProfileScreen
 import com.hearu.app.ui.home.SeekerDashboard
 import com.hearu.app.ui.onboarding.OnboardingScreen
 import com.hearu.app.ui.tools.BreathingExerciseScreen
-import dagger.hilt.EntryPoint
-import dagger.hilt.InstallIn
-import dagger.hilt.android.EntryPointAccessors
-import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.launch
+import dagger.hilt.internal.GeneratedComponentManagerHolder
 
-@EntryPoint
-@InstallIn(SingletonComponent::class)
-interface NavigationEntryPoint {
-    fun userRepository(): UserRepository
+private val VALID_SESSION_ID_REGEX = Regex("^[A-Za-z0-9_-]{1,128}$")
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 sealed class Screen(val route: String) {
@@ -69,6 +68,7 @@ sealed class Screen(val route: String) {
 @Composable
 fun HearUNavigation(
     authViewModel: AuthViewModel = hiltViewModel(),
+    giverViewModel: GiverViewModel? = null,
     initialSessionId: String? = null,
     onDeepLinkConsumed: () -> Unit = {}
 ) {
@@ -180,34 +180,29 @@ fun HearUNavigation(
         }
 
         composable(Screen.GiverHome.route) {
-            val context = LocalContext.current
-            val scope = rememberCoroutineScope()
-            val userRepository = remember(context) {
-                runCatching {
-                    EntryPointAccessors.fromApplication(
-                        context.applicationContext,
-                        NavigationEntryPoint::class.java
-                    ).userRepository()
-                }.getOrNull()
+            val hostActivity = LocalContext.current.findActivity()
+            val resolvedGiverViewModel: GiverViewModel? = giverViewModel
+                ?: if (hostActivity is GeneratedComponentManagerHolder) {
+                    hiltViewModel()
+                } else {
+                    null
+                }
+            val activeSession = if (resolvedGiverViewModel != null) {
+                val session by resolvedGiverViewModel.activeSession.collectAsStateWithLifecycle()
+                session
+            } else {
+                null
             }
 
             GiverDashboard(
+                activeSessionId = activeSession?.sessionId,
+                activeSeekerId = activeSession?.seekerId,
                 onNavigateToProfile = { navController.navigate(Screen.Profile.route) },
                 onNavigateToChat = { sessionId, userId ->
                     navController.navigate(Screen.Chat.createRoute(sessionId, userId))
                 },
                 onAvailabilityChanged = { isOnline ->
-                    val uid = authViewModel.currentUserId
-                    if (!uid.isNullOrBlank()) {
-                        scope.launch {
-                            try {
-                                userRepository?.updateUserStatus(uid, if (isOnline) "online" else "offline")
-                            } catch (e: CancellationException) {
-                                throw e
-                            } catch (_: Exception) {
-                            }
-                        }
-                    }
+                    resolvedGiverViewModel?.setAvailability(isOnline)
                 }
             )
         }
@@ -274,6 +269,7 @@ fun HearUNavigation(
     }
     LaunchedEffect(initialSessionId, authState) {
         if (!initialSessionId.isNullOrBlank() &&
+            VALID_SESSION_ID_REGEX.matches(initialSessionId) &&
             authState is AuthState.Authenticated &&
             initialSessionId != consumedSessionId
         ) {

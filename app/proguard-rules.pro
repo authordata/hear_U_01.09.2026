@@ -1,6 +1,7 @@
 # ProGuard & R8 Optimization Rules for HearU
 
 # General attributes
+-renamesourcefileattribute SourceFile
 -keepattributes *Annotation*, Signature, InnerClasses, EnclosingMethod, SourceFile, LineNumberTable
 
 # Keep Domain Models & Data Classes (Firestore deserialization)
@@ -67,9 +68,11 @@
 -dontwarn javax.annotation.**
 -dontwarn org.checkerframework.**
 
-# Strip debug/verbose Log calls in release builds
+# Strip verbose/debug/info/warn Log calls in release builds
 -assumenosideeffects class android.util.Log {
     public static boolean isLoggable(java.lang.String, int);
     public static int v(...);
     public static int d(...);
+    public static int i(...);
+    public static int w(...);
 }
